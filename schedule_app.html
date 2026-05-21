@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>班表</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2d3f55">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="班表">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #eef4fb;
+  --surface: #ffffff;
+  --border: #b8d0e8;
+  --text: #1a2a3a;
+  --text-muted: #6a89a8;
+  --accent: #2e7abf;
+  --accent-light: #ddeeff;
+  --accent-blue: #2e7abf;
+  --accent-blue-light: #ddeeff;
+  --accent-mid: #5a9fd4;
+  --header-bg: #1c4f80;
+  --header-text: #eef6ff;
+  --am-border: #9ac0dc;
+  --cell-weekend: #e4eff8;
+  --shadow: 0 2px 16px rgba(30,80,140,0.10);
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Noto Serif SC', serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── TOP NAV ── */
+.topnav {
+  background: var(--header-bg);
+  color: var(--header-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topnav-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.topnav-tabs {
+  display: flex;
+  gap: 4px;
+}
+.topnav-tab {
+  background: none;
+  border: none;
+  color: rgba(247,244,239,0.55);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.topnav-tab.active {
+  background: rgba(255,255,255,0.22);
+  color: var(--header-text);
+}
+
+/* ── VIEWS ── */
+.view { display: none; flex: 1; padding: 20px; max-width: 900px; margin: 0 auto; width: 100%; }
+.view.active { display: block; }
+
+/* ── CALENDAR VIEW ── */
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.cal-month-label {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.cal-nav-btn {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  width: 36px; height: 36px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.cal-nav-btn:hover { background: var(--border); }
+
+.cal-grid {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  border: 1.5px solid var(--border);
+}
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7,1fr);
+  background: var(--header-bg);
+}
+.cal-wd {
+  color: var(--header-text);
+  text-align: center;
+  padding: 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+.cal-wd.weekend { opacity: 0.5; }
+
+.cal-days {
+  display: grid;
+  grid-template-columns: repeat(7,1fr);
+}
+.cal-day {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  min-height: 80px;
+  padding: 6px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.12s;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cal-day:hover { background: #d8ecf8; }
+.cal-day.empty { background: var(--bg); cursor: default; }
+.cal-day.weekend { background: var(--cell-weekend); }
+.cal-day.today .cal-day-num {
+  background: #2e7abf;
+  color: white;
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+}
+.cal-day-num {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Mono', monospace;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+}
+.cal-day-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.cal-slot {
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.cal-slot.am { background: #fce0ea; color: #c05070; }
+.cal-slot.pm { background: #cde4f7; color: #2266aa; }
+.cal-slot.off { background: #e8f0f8; color: #8aabcc; }
+.cal-slot-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.cal-slot-spacer { height: 20px; flex-shrink: 0; }
+
+/* Calendar legend */
+.cal-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.cal-legend-item { display: flex; align-items: center; gap: 5px; }
+.cal-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+.generate-btn {
+  width: 100%;
+  margin-top: 20px;
+  background: var(--header-bg);
+  color: var(--header-text);
+  border: none;
+  border-radius: var(--radius);
+  padding: 16px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.generate-btn:hover { opacity: 0.85; }
+
+/* ── SETTINGS VIEW ── */
+.settings-section {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.settings-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.form-row label { font-size: 13px; min-width: 80px; }
+.form-input {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+  flex: 1;
+  min-width: 160px;
+}
+.form-input:focus { border-color: #2e7abf; }
+
+.radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  font-size: 13px;
+  transition: all 0.15s;
+  background: var(--bg);
+}
+.radio-label:has(input:checked) {
+  border-color: #2e7abf;
+  background: #ddeeff;
+  color: #1c5f9a;
+}
+.radio-label input { display: none; }
+
+/* Rule builder */
+.rule-builder {
+  margin-top: 8px;
+}
+.rule-day-grid {
+  display: grid;
+  grid-template-columns: repeat(7,1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.rule-day-btn {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 4px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  background: var(--bg);
+  transition: all 0.15s;
+}
+.rule-day-btn.selected-am { border-color: #5aaee0; background: #d0eaf8; color: #1a5a8a; }
+.rule-day-btn.selected-pm { border-color: #2e7abf; background: #b8d8f4; color: #1c4f80; }
+.rule-day-btn.selected-full { border-color: #1c4f80; background: #9ac8ec; color: #0d2f50; }
+.rule-day-btn.selected-half { border-color: #5aaee0; background: #d0eaf8; color: #1a5a8a; }
+
+.rule-slot-picker {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.slot-btn {
+  flex: 1;
+  min-width: 70px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--bg);
+  transition: all 0.15s;
+  text-align: center;
+}
+.slot-btn.active-am { border-color: #5aaee0; background: #d0eaf8; color: #1a5a8a; }
+.slot-btn.active-pm { border-color: #2e7abf; background: #b8d8f4; color: #1c4f80; }
+.slot-btn.active-full { border-color: #1c4f80; background: #9ac8ec; color: #0d2f50; }
+.slot-btn.active-half { border-color: #5aaee0; background: #d0eaf8; color: #1a5a8a; }
+
+.settings-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  background: #d8edf8;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 4px;
+}
+
+.save-btn {
+  width: 100%;
+  background: var(--header-bg);
+  color: var(--header-text);
+  border: none;
+  border-radius: var(--radius);
+  padding: 14px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 0.2s;
+}
+.save-btn:hover { opacity: 0.85; }
+.save-feedback {
+  text-align: center;
+  font-size: 13px;
+  color: #2e7abf;
+  margin-top: 8px;
+  height: 20px;
+  transition: opacity 0.3s;
+}
+
+/* ── ROSTER VIEW ── */
+.roster-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.roster-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.roster-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.export-btn {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 600;
+}
+.export-btn:hover { background: var(--header-bg); color: var(--header-text); border-color: var(--header-bg); }
+
+/* Submit button */
+.submit-btn {
+  width: 100%;
+  margin-top: 16px;
+  background: #1a7a4a;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 16px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.submit-btn:hover { opacity: 0.85; }
+.submit-btn:disabled { background: #8aabcc; cursor: not-allowed; opacity: 0.7; }
+
+/* Roster table */
+.roster-wrap {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  border: 2px solid var(--header-bg);
+}
+.roster-name-bar {
+  background: var(--header-bg);
+  color: var(--header-text);
+  text-align: center;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.roster-week {
+  border-bottom: 2px solid var(--header-bg);
+}
+.roster-week:last-child { border-bottom: none; }
+
+.roster-week-head {
+  display: grid;
+  grid-template-columns: 56px repeat(7,1fr);
+  background: #c8e0f4;
+  border-bottom: 1px solid var(--border);
+}
+.roster-wh-cell {
+  border-right: 2px solid #1c4f80;
+  padding: 6px 4px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+.roster-wh-cell:last-child { border-right: none; }
+.roster-wh-day { font-size: 11px; font-weight: 700; }
+.roster-wh-date { font-size: 9px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+
+.roster-slot-row {
+  display: grid;
+  grid-template-columns: 56px repeat(7,1fr);
+}
+.roster-slot-row.am-row {}
+.roster-slot-row.pm-row {}
+
+.roster-label-cell {
+  border-right: 2px solid #1c4f80;
+  background: #c8e0f4;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1c4f80;
+}
+.roster-cell {
+  border-right: 2px solid #1c4f80;
+  height: 26px;
+}
+.roster-cell:last-child { border-right: none; }
+/* 全天：深蓝 */
+.roster-cell.filled-full {
+  background-color: #90c4e8;
+  background-image: none;
+}
+/* 半天：浅蓝 */
+.roster-cell.filled-half {
+  background-color: #d0ecf8;
+  background-image: none;
+}
+/* 兼容旧 pink/blue（保留以防其他地方引用） */
+.roster-cell.filled-pink,
+.roster-cell.filled-blue {
+  background-color: #d0ecf8;
+  background-image: none;
+}
+
+
+/* roster legend */
+.roster-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.roster-legend-swatch {
+  width: 28px; height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+.roster-legend-item { display: flex; align-items: center; gap: 6px; }
+.roster-color-toggle { display: flex; gap: 8px; margin-left: auto; }
+.color-btn {
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  background: var(--bg);
+  font-weight: 600;
+}
+.color-btn.active-pink { border-color: #d97090; background: #fde8ee; color: #d97090; }
+.color-btn.active-blue { border-color: #2e7abf; background: #ddeeff; color: #2e7abf; }
+
+/* ── CONFIRM MODAL ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 300;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  width: 320px;
+  max-width: 92vw;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+.modal-body {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-bottom: 22px;
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+.modal-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.modal-btn:hover { opacity: 0.85; }
+.modal-btn.cancel { background: var(--bg); border: 1.5px solid var(--border); color: var(--text-muted); }
+.modal-btn.confirm { background: #1a7a4a; color: #fff; }
+.modal-btn.confirm:disabled { background: #8aabcc; cursor: not-allowed; }
+
+/* Submit status banner */
+.submit-status {
+  margin-top: 12px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  text-align: center;
+  display: none;
+}
+.submit-status.success { background: #d4edda; color: #1a5c2a; display: block; }
+.submit-status.error { background: #fde8e8; color: #922; display: block; }
+.submit-status.loading { background: #d8edf8; color: #1a4a6a; display: block; }
+
+@media (max-width: 600px) {
+  .topnav { padding: 0 12px; }
+  .topnav-tab { padding: 6px 10px; font-size: 12px; }
+  .view { padding: 14px; }
+  .cal-day { min-height: 56px; padding: 4px; }
+  .cal-slot { font-size: 9px; }
+  .roster-wh-day { font-size: 9px; }
+  .roster-cell { height: 20px; }
+  .rule-day-grid { grid-template-columns: repeat(4,1fr); }
+}
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="topnav-title" id="nav-title">班表</span>
+  <div class="topnav-tabs">
+    <button class="topnav-tab active" onclick="showView('calendar')">日历</button>
+    <button class="topnav-tab" onclick="showView('roster')">班表</button>
+  </div>
+</nav>
+
+<!-- CALENDAR VIEW -->
+<div class="view active" id="view-calendar">
+
+  <!-- 名称 + 月份 行 -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;">
+    <input class="form-input" id="s-name" type="text" placeholder="请输入名称"
+      style="max-width:140px;min-width:100px;flex-shrink:0;margin:0;"
+      oninput="onNameInput(this.value)">
+    <div style="text-align:center;flex:1;">
+      <div class="cal-month-label" id="cal-month-label"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">请填写下个月可工作时间</div>
+    </div>
+    <div style="width:140px;"></div>
+  </div>
+
+  <!-- 日历格 -->
+  <div class="cal-grid">
+    <div class="cal-weekdays">
+      <div class="cal-wd">一</div>
+      <div class="cal-wd">二</div>
+      <div class="cal-wd">三</div>
+      <div class="cal-wd">四</div>
+      <div class="cal-wd">五</div>
+      <div class="cal-wd weekend">六</div>
+      <div class="cal-wd weekend">日</div>
+    </div>
+    <div class="cal-days" id="cal-days"></div>
+  </div>
+
+  <div class="cal-legend">
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f5c0cc;border:1px solid #d97090;"></div>上午可工作</div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#b8d4f0;border:1px solid #4a7fb5;"></div>下午可工作</div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e8f0f8;border:1px solid #aac4d8;"></div>休息</div>
+  </div>
+  <div style="margin-top:10px;font-size:12px;color:var(--text-muted);text-align:center;">点击日期可手动覆盖排班</div>
+
+  <!-- 默认规则（内嵌） -->
+  <div class="settings-section" style="margin-top:20px;">
+    <h3>默认规则</h3>
+    <div class="rule-builder">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">点击星期设置可工作时段，再次点击切换全天／半天／清除：</div>
+      <!-- 星期格 -->
+      <div class="rule-day-grid" id="rule-day-grid"></div>
+      <!-- 全天/半天 选择按钮 + 清除 -->
+      <div class="rule-slot-picker" style="margin-top:10px;">
+        <button class="slot-btn" id="sb-full" onclick="setSlotMode('full')">☀️ 全天</button>
+        <button class="slot-btn" id="sb-half" onclick="setSlotMode('half')">🌤 半天</button>
+        <button class="slot-btn" id="sb-off" onclick="clearAllRules()" style="flex:none;padding:8px 12px;">🔄 全部清除</button>
+      </div>
+      <!-- 时间设置 -->
+      <div id="time-settings-box" style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f0f6fc;border-radius:8px;padding:10px;">
+        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;">全天时段</div>
+        <label style="font-size:12px;color:var(--text);">开始 <input type="time" id="t-full-start" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+        <label style="font-size:12px;color:var(--text);">结束 <input type="time" id="t-full-end" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;margin-top:4px;">半天时段</div>
+        <label style="font-size:12px;color:var(--text);">开始 <input type="time" id="t-half-start" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+        <label style="font-size:12px;color:var(--text);">结束 <input type="time" id="t-half-end" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+      </div>
+    </div>
+    <div id="rule-preview" style="font-size:12px;color:var(--text-muted);line-height:1.8;margin-top:8px;"></div>
+  </div>
+
+  <button class="generate-btn" onclick="generateRoster()">生成班表 →</button>
+</div>
+
+
+<!-- ROSTER VIEW -->
+<div class="view" id="view-roster">
+  <div class="roster-header">
+    <div class="roster-title" id="roster-title-label"></div>
+
+  </div>
+  <div class="roster-legend">
+    <div class="roster-legend-item">
+      <div class="roster-legend-swatch" style="background:#90c4e8;"></div>
+      全天
+    </div>
+    <div class="roster-legend-item">
+      <div class="roster-legend-swatch" style="background:#d0ecf8;"></div>
+      半天
+    </div>
+  </div>
+
+  <div style="margin-top:14px;" id="roster-content"></div>
+
+  <!-- Submit button -->
+  <button class="submit-btn" id="submit-btn" onclick="openSubmitConfirm()">
+    ✉️ 提交班表给管理员
+  </button>
+  <div class="submit-status" id="submit-status"></div>
+</div>
+
+<!-- Click-to-override modal -->
+<div id="override-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);padding:24px;width:290px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:6px;" id="modal-date-label"></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">选择该日排班：</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="export-btn" style="width:100%;" onclick="applyOverride('full')">☀️ 全天</button>
+      <button class="export-btn" style="width:100%;" onclick="applyOverride('half')">🌤 半天</button>
+      <button class="export-btn" style="width:100%;" onclick="applyOverride('off')">💤 休息</button>
+      <button class="export-btn" style="width:100%;background:#f4f0ff;border-color:#9b59b6;color:#6c3483;" onclick="toggleCustomInput()">🕐 自定时间</button>
+      <!-- 自定时间输入框 -->
+      <div id="custom-time-box" style="display:none;background:#f8f4ff;border:1.5px solid #c39bd3;border-radius:8px;padding:12px;margin-top:2px;">
+        <div style="font-size:11px;color:#6c3483;font-weight:600;margin-bottom:8px;">自定义上班时间</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <label style="font-size:12px;">开始<br><input type="time" id="custom-start" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
+          <label style="font-size:12px;">结束<br><input type="time" id="custom-end" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
+        </div>
+        <button onclick="applyCustomOverride()" style="margin-top:10px;width:100%;background:#9b59b6;color:#fff;border:none;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">确认自定时间</button>
+      </div>
+      <button class="export-btn" style="width:100%;color:var(--text-muted);" onclick="applyOverride(null)">↩ 恢复默认</button>
+    </div>
+    <button onclick="closeModal()" style="margin-top:14px;width:100%;background:none;border:none;font-family:inherit;font-size:13px;color:var(--text-muted);cursor:pointer;">取消</button>
+  </div>
+</div>
+
+<!-- Submit Confirm Modal -->
+<div class="modal-overlay" id="submit-modal">
+  <div class="modal-box">
+    <div class="modal-title">📋 确认提交班表</div>
+    <div class="modal-body" id="submit-modal-body">
+      确认将您的可工作时段提交给管理员吗？提交后管理员将根据此信息安排上班时间。
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeSubmitModal()">取消</button>
+      <button class="modal-btn confirm" id="confirm-submit-btn" onclick="doSubmit()">确认提交</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 后端适配层 ────────────────────────────────────────────────────
+const Backend = {
+  // 提交班表（POST）
+  async postSchedule(payload) {
+    if (BACKEND_MODE === 'local') {
+      const resp = await fetch(LOCAL_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, action: 'submitSchedule' })
+      });
+      return await resp.json();
+    } else {
+      // GAS: 使用 no-cors，无法读取响应体，视为成功
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return { success: true };
+    }
+  },
+
+  // 读取班表提交（GET）
+  async getSubmissions(year, month) {
+    if (BACKEND_MODE === 'local') {
+      const resp = await fetch(`${LOCAL_API_URL}?action=getSubmissions&year=${year}&month=${month}`);
+      return await resp.json();
+    } else {
+      const resp = await fetch(`${APPS_SCRIPT_URL}?action=getSubmissions&year=${year}&month=${month}`);
+      return await resp.json();
+    }
+  }
+};
+
+// ── STATE ──
+let state = {
+  calYear: 0, calMonth: 0,
+  settings: {
+    name: '某某',
+    logic: 'include',
+    dayRules: [null,null,null,null,null,null,null],
+    fullStart: '07:00',
+    fullEnd:   '19:00',
+    halfStart: '07:00',
+    halfEnd:   '13:00'
+  },
+  overrides: {},
+  rosterColor: 'blue',
+  rosterMonth: null,
+  slotMode: 'full'
+};
+
+const DAY_NAMES_ZH = ['一','二','三','四','五','六','日'];
+const DAY_NAMES_EN = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+// ── PERSISTENCE ──
+function loadState() {
+  try {
+    const s = localStorage.getItem('schedule_app_v2');
+    if (s) {
+      const parsed = JSON.parse(s);
+      const loaded = parsed.settings || {};
+      state.settings = Object.assign(state.settings, loaded);
+      // 兼容旧版无时间字段
+      if (!state.settings.fullStart) state.settings.fullStart = '07:00';
+      if (!state.settings.fullEnd)   state.settings.fullEnd   = '19:00';
+      if (!state.settings.halfStart) state.settings.halfStart = '07:00';
+      if (!state.settings.halfEnd)   state.settings.halfEnd   = '13:00';
+      state.overrides = parsed.overrides || {};
+      state.rosterColor = parsed.rosterColor || 'blue';
+    }
+  } catch(e){}
+}
+function saveState() {
+  localStorage.setItem('schedule_app_v2', JSON.stringify({
+    settings: state.settings,
+    overrides: state.overrides,
+    rosterColor: state.rosterColor
+  }));
+}
+
+// ── VIEWS ──
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.topnav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  const tabs = ['calendar','roster'];
+  document.querySelectorAll('.topnav-tab')[tabs.indexOf(name)].classList.add('active');
+  if (name === 'calendar') { renderCalendar(); renderInlineSettings(); }
+}
+
+// ── CALENDAR ──
+// 计算"下个月"的年月，员工只能填写下个月的班表
+function getNextMonth() {
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth() + 1;
+  if (m === 12) { y++; m = 1; } else { m++; }
+  return { y, m };
+}
+
+function initCalendar() {
+  const { y, m } = getNextMonth();
+  state.calYear = y;
+  state.calMonth = m;
+}
+
+function changeMonth(delta) {
+  // 员工只可提交下个月的班表，月份切换已禁用
+}
+
+// 将时间字符串"HH:MM"转为分钟数
+function timeToMinutes(t) {
+  if (!t) return 0;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+// 00:00 显示为 24:00
+function fmtTime(t) {
+  if (!t) return t;
+  return t === '00:00' ? '24:00' : t;
+}
+// 根据 slot 的时长判断显示类别：'full' | 'half'
+function slotDisplayType(slot) {
+  if (!slot || slot.type === 'off') return 'off';
+  if (slot.type === 'full') return 'full';
+  if (slot.type === 'half') return 'half';
+  if (slot.type === 'custom') {
+    const dur = timeToMinutes(slot.end) - timeToMinutes(slot.start);
+    const fullDur = timeToMinutes(state.settings.fullEnd) - timeToMinutes(state.settings.fullStart);
+    return (dur >= fullDur) ? 'full' : 'half';
+  }
+  return 'off';
+}
+
+function getSlotForDate(year, month, day) {
+  const key = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  // 自定义 override 可能是对象 {type,start,end}
+  const ov = state.overrides[key];
+  if (ov !== undefined) {
+    if (typeof ov === 'object' && ov !== null) return ov; // custom object
+    if (ov === 'off')  return { type: 'off',  start: '', end: '' };
+    if (ov === 'full') return { type: 'full', start: state.settings.fullStart, end: state.settings.fullEnd };
+    if (ov === 'half') return { type: 'half', start: state.settings.halfStart, end: state.settings.halfEnd };
+  }
+  const d = new Date(year, month-1, day);
+  const wd = (d.getDay() + 6) % 7;
+  const rule = state.settings.dayRules[wd];
+  let rawType;
+  if (state.settings.logic === 'include') {
+    rawType = rule || 'off';
+  } else {
+    // exclude 模式：标记了 full/half 的星期为休息，其余为全天
+    if (!rule) rawType = 'full';
+    else if (rule === 'full') rawType = 'off';
+    else if (rule === 'half') rawType = 'half'; // 半天排除模式：标记=半天工作
+    else rawType = 'off';
+  }
+  if (rawType === 'off')  return { type: 'off',  start: '', end: '' };
+  if (rawType === 'full') return { type: 'full', start: state.settings.fullStart, end: state.settings.fullEnd };
+  if (rawType === 'half') return { type: 'half', start: state.settings.halfStart, end: state.settings.halfEnd };
+  // 兼容旧数据 am/pm
+  if (rawType === 'am') return { type: 'half', start: '07:00', end: '13:00' };
+  if (rawType === 'pm') return { type: 'half', start: '13:00', end: '19:00' };
+  return { type: 'off', start: '', end: '' };
+}
+
+function renderCalendar() {
+  const y = state.calYear, m = state.calMonth;
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  document.getElementById('cal-month-label').textContent = `${y}年 ${monthNames[m-1]}`;
+  document.getElementById('nav-title').textContent = state.settings.name + '的班表';
+
+  const firstDay = new Date(y, m-1, 1);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const startWd = (firstDay.getDay() + 6) % 7;
+
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  let html = '';
+  for (let i = 0; i < startWd; i++) {
+    html += `<div class="cal-day empty"></div>`;
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const wd = (startWd + d - 1) % 7;
+    const isWeekend = wd >= 5;
+    const isToday = key === todayKey;
+    const slot = getSlotForDate(y, m, d);
+    const hasOverride = state.overrides[key] !== undefined;
+
+    let slotHTML = '';
+    if (slot.type === 'full') {
+      slotHTML += `<div class="cal-slot am"><span class="cal-slot-dot"></span>${fmtTime(slot.start)}–${fmtTime(slot.end)}</div>`;
+    } else if (slot.type === 'half') {
+      slotHTML += `<div class="cal-slot pm"><span class="cal-slot-dot"></span>${fmtTime(slot.start)}–${fmtTime(slot.end)}</div>`;
+    } else if (slot.type === 'custom') {
+      slotHTML += `<div class="cal-slot" style="background:#f0e6ff;color:#6c3483;border-radius:3px;font-size:9px;padding:2px 3px;"><span class="cal-slot-dot" style="background:#9b59b6;"></span>${fmtTime(slot.start)}–${fmtTime(slot.end)}</div>`;
+    } else {
+      slotHTML += `<div class="cal-slot off">休息</div>`;
+    }
+
+    html += `<div class="cal-day ${isWeekend?'weekend':''} ${isToday?'today':''}" onclick="openOverride('${key}',${d})">
+      <div class="cal-day-num">${d}${hasOverride ? '<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--accent);"></span>' : ''}</div>
+      <div class="cal-day-slots">${slotHTML}</div>
+    </div>`;
+  }
+  document.getElementById('cal-days').innerHTML = html;
+}
+
+// ── OVERRIDE MODAL ──
+let modalKey = null;
+function openOverride(key, day) {
+  modalKey = key;
+  const parts = key.split('-');
+  document.getElementById('modal-date-label').textContent = `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+  const m = document.getElementById('override-modal');
+  m.style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('override-modal').style.display = 'none';
+  document.getElementById('custom-time-box').style.display = 'none';
+  modalKey = null;
+}
+function applyOverride(val) {
+  if (!modalKey) return;
+  if (val === null) { delete state.overrides[modalKey]; }
+  else { state.overrides[modalKey] = val; }
+  saveState();
+  closeModal();
+  renderCalendar();
+}
+function toggleCustomInput() {
+  const box = document.getElementById('custom-time-box');
+  const isOpen = box.style.display !== 'none';
+  if (!isOpen) {
+    // 预填当前该日的时间
+    const cur = modalKey ? state.overrides[modalKey] : null;
+    const defStart = (cur && typeof cur === 'object') ? cur.start : state.settings.fullStart;
+    const defEnd   = (cur && typeof cur === 'object') ? cur.end   : state.settings.fullEnd;
+    document.getElementById('custom-start').value = defStart || '07:00';
+    document.getElementById('custom-end').value   = defEnd   || '19:00';
+  }
+  box.style.display = isOpen ? 'none' : 'block';
+}
+function applyCustomOverride() {
+  if (!modalKey) return;
+  const start = document.getElementById('custom-start').value;
+  const end   = document.getElementById('custom-end').value;
+  if (!start || !end) { alert('请填写开始和结束时间'); return; }
+  if (start >= end) { alert('结束时间必须晚于开始时间'); return; }
+  state.overrides[modalKey] = { type: 'custom', start, end };
+  saveState();
+  closeModal();
+  renderCalendar();
+}
+
+// ── SETTINGS (inline in calendar view) ──
+let slotModeState = 'full';
+
+function onNameInput(val) {
+  state.settings.name = val.trim() || '某某';
+  saveState();
+  document.getElementById('nav-title').textContent = state.settings.name + '的班表';
+}
+
+function setSlotMode(mode) {
+  slotModeState = mode;
+  document.querySelectorAll('.slot-btn').forEach(b => {
+    b.classList.remove('active-am','active-pm','active-full','active-half');
+    b.style.borderColor = ''; b.style.background = ''; b.style.color = '';
+  });
+  const map = {full:'active-full', half:'active-half'};
+  if (map[mode]) {
+    const btn = document.getElementById('sb-'+mode);
+    if (btn) btn.classList.add(map[mode]);
+  }
+}
+
+function onTimeChange() {
+  state.settings.fullStart = document.getElementById('t-full-start').value || '07:00';
+  state.settings.fullEnd   = document.getElementById('t-full-end').value   || '19:00';
+  state.settings.halfStart = document.getElementById('t-half-start').value || '07:00';
+  state.settings.halfEnd   = document.getElementById('t-half-end').value   || '13:00';
+  saveState();
+  renderCalendar();
+}
+
+function renderInlineSettings() {
+  const nameEl = document.getElementById('s-name');
+  if (nameEl) nameEl.value = (state.settings.name && state.settings.name !== '某某') ? state.settings.name : '';
+
+  // 排班逻辑固定为 include（选择工作时段）
+  state.settings.logic = 'include';
+
+  // 同步时间输入框
+  const tfs = document.getElementById('t-full-start');
+  if (tfs) {
+    tfs.value = state.settings.fullStart || '07:00';
+    document.getElementById('t-full-end').value   = state.settings.fullEnd   || '19:00';
+    document.getElementById('t-half-start').value = state.settings.halfStart || '07:00';
+    document.getElementById('t-half-end').value   = state.settings.halfEnd   || '13:00';
+  }
+
+  const grid = document.getElementById('rule-day-grid');
+  grid.innerHTML = '';
+  DAY_NAMES_ZH.forEach((name, i) => {
+    const rule = state.settings.dayRules[i];
+    let cls = '';
+    if (rule === 'full') cls = 'selected-full';
+    else if (rule === 'half') cls = 'selected-half';
+    const slotLabel = rule ? ({'half':'半天','full':'全天','off':'休'}[rule] || rule) : '—';
+    grid.innerHTML += `<button class="rule-day-btn ${cls}" onclick="toggleRuleDay(${i})" title="周${name}">${['一','二','三','四','五','六','日'][i]}<br><span style="font-size:9px;">${slotLabel}</span></button>`;
+  });
+
+  setSlotMode(slotModeState);
+  updateRulePreview();
+}
+
+function toggleRuleDay(i) {
+  const mode = slotModeState; // 'full' | 'half'
+  const current = state.settings.dayRules[i];
+  state.settings.dayRules[i] = (current === mode) ? null : mode;
+  saveState();
+  renderInlineSettings();
+  renderCalendar();
+}
+
+function clearAllRules() {
+  state.settings.dayRules = [null,null,null,null,null,null,null];
+  slotModeState = 'full';
+  saveState();
+  renderInlineSettings();
+  setSlotMode('full');
+  renderCalendar();
+}
+
+function updateRulePreview() {
+  const rules = state.settings.dayRules;
+  const dayNames = ['周一','周二','周三','周四','周五','周六','周日'];
+  const slotLabel = {full:'全天', half:'半天', off:'休息'};
+  let set = rules.map((r,i) => r ? `${dayNames[i]}${slotLabel[r] || r}` : null).filter(Boolean);
+  if (set.length === 0) {
+    document.getElementById('rule-preview').textContent = '（尚未设置任何规则，所有日期默认休息）';
+    return;
+  }
+  document.getElementById('rule-preview').textContent = `默认：${set.join('、')} 工作`;
+}
+
+// legacy alias (keeped for any remaining call sites)
+function saveSettings() {
+  state.settings.name = document.getElementById('s-name').value.trim() || '某某';
+  state.settings.logic = 'include'; // 固定为选择工作时段
+  saveState();
+  document.getElementById('nav-title').textContent = state.settings.name + '的班表';
+}
+
+// ── ROSTER ──
+function generateRoster() {
+  const { y: ny, m: nm } = getNextMonth();
+  if (state.calYear !== ny || state.calMonth !== nm) {
+    alert('只能提交下个月的班表。');
+    return;
+  }
+  state.rosterMonth = { year: state.calYear, month: state.calMonth };
+  renderRoster();
+  showView('roster');
+  // Reset submit status
+  const st = document.getElementById('submit-status');
+  st.className = 'submit-status';
+  st.textContent = '';
+  document.getElementById('submit-btn').disabled = false;
+}
+
+function setRosterColor(color) {
+  state.rosterColor = color;
+  saveState();
+  document.getElementById('cb-pink').className = 'color-btn' + (color === 'pink' ? ' active-pink' : '');
+  document.getElementById('cb-blue').className = 'color-btn' + (color === 'blue' ? ' active-blue' : '');
+  renderRoster();
+}
+
+function renderRoster() {
+  if (!state.rosterMonth) {
+    state.rosterMonth = { year: state.calYear, month: state.calMonth };
+  }
+  const { year: y, month: m } = state.rosterMonth;
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  const color = state.rosterColor;
+  const fillClass = `filled-${color}`;
+
+  document.getElementById('roster-title-label').textContent = `${y}年${monthNames[m-1]} · ${state.settings.name}的可工作时段`;
+
+  const firstDay = new Date(y, m-1, 1);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const startWd = (firstDay.getDay() + 6) % 7;
+
+  const weeks = [];
+  let week = new Array(7).fill(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const wd = (startWd + d - 1) % 7;
+    week[wd] = d;
+    if (wd === 6 || d === daysInMonth) {
+      weeks.push([...week]);
+      week = new Array(7).fill(null);
+    }
+  }
+
+  let html = `<div class="roster-wrap" id="roster-printable">
+    <div class="roster-name-bar">${state.settings.name} · ${y}年${monthNames[m-1]} · 可工作时段</div>`;
+
+  weeks.forEach(week => {
+    html += `<div class="roster-week">
+      <div class="roster-week-head">
+        <div class="roster-wh-cell" style="position:relative;overflow:hidden;font-size:9px;">
+          <svg style="position:absolute;top:0;left:0;width:100%;height:100%;"><line x1="0" y1="0" x2="100%" y2="100%" stroke="#b0a89e" stroke-width="1"/></svg>
+          <span style="position:absolute;top:3px;right:4px;font-size:8px;color:#999;">日期</span>
+          <span style="position:absolute;bottom:3px;left:4px;font-size:8px;color:#999;">姓名</span>
+        </div>`;
+    week.forEach((d, i) => {
+      const engDay = DAY_NAMES_EN[i];
+      const dateStr = d ? `${d}-${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]}-${String(y).slice(2)}` : '';
+      html += `<div class="roster-wh-cell"><div class="roster-wh-day">${engDay}</div><div class="roster-wh-date">${dateStr}</div></div>`;
+    });
+    html += `</div>`;
+
+    html += `<div class="roster-slot-row am-row">
+      <div class="roster-label-cell">可工作时段</div>`;
+    week.forEach(d => {
+      const slot = d ? getSlotForDate(y, m, d) : null;
+      const isOff = !slot || slot.type === 'off';
+      const dispType = slotDisplayType(slot); // 'full' | 'half' | 'off'
+      const filled = !isOff ? `filled-${dispType}` : '';
+      let inner = '';
+      if (!slot) {
+        inner = '';
+      } else if (isOff) {
+        inner = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b0b8c8" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="5" y1="5" x2="19" y2="19"/></svg>`;
+      } else {
+        inner = `<span style="font-size:8px;line-height:1.2;text-align:center;">${fmtTime(slot.start)}<br>${fmtTime(slot.end)}</span>`;
+      }
+      html += `<div class="roster-cell ${filled}" style="display:flex;align-items:center;justify-content:center;">${inner}</div>`;
+    });
+    html += `</div>`;
+
+    html += `</div>`;
+  });
+
+  html += `</div>`;
+  document.getElementById('roster-content').innerHTML = html;
+
+}
+
+// ── SUBMIT FLOW ──
+function buildSchedulePayload() {
+  if (!state.rosterMonth) return null;
+  const { year: y, month: m } = state.rosterMonth;
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const days = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const slotObj = getSlotForDate(y, m, d);
+    days.push({ date: dateKey, slot: slotObj.type, start: slotObj.start, end: slotObj.end });
+  }
+  return {
+    name: state.settings.name,
+    year: y,
+    month: m,
+    submittedAt: new Date().toISOString(),
+    schedule: days
+  };
+}
+
+function openSubmitConfirm() {
+  if (!state.rosterMonth) {
+    alert('请先生成班表再提交。');
+    return;
+  }
+  if (!state.settings.name || state.settings.name === '某某') {
+    alert('请先在日历页左上角填写名称，再提交班表。');
+    showView('calendar');
+    document.getElementById('s-name').focus();
+    return;
+  }
+  const { year: y, month: m } = state.rosterMonth;
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  document.getElementById('submit-modal-body').textContent =
+    `确认将 ${state.settings.name} 的 ${y}年${monthNames[m-1]} 可工作时段提交给管理员吗？提交后管理员将根据此信息安排上班时间。`;
+  document.getElementById('submit-modal').classList.add('open');
+  document.getElementById('confirm-submit-btn').disabled = false;
+}
+
+function closeSubmitModal() {
+  document.getElementById('submit-modal').classList.remove('open');
+}
+
+async function doSubmit() {
+  const payload = buildSchedulePayload();
+  if (!payload) return;
+
+  const btn = document.getElementById('confirm-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+
+  const statusEl = document.getElementById('submit-status');
+
+  // Check if backend is configured
+  if (BACKEND_MODE === 'gas' && (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('YOUR_APPS_SCRIPT'))) {
+    closeSubmitModal();
+    statusEl.className = 'submit-status error';
+    statusEl.textContent = '⚠️ 尚未配置 Google Sheets 连接。请联系管理员设置后端接口。';
+    btn.disabled = false;
+    btn.textContent = '确认提交';
+    return;
+  }
+
+  try {
+    statusEl.className = 'submit-status loading';
+    statusEl.textContent = '⏳ 正在提交，请稍候…';
+
+    const result = await Backend.postSchedule(payload);
+
+    closeSubmitModal();
+    if (result && result.success === false) {
+      statusEl.className = 'submit-status error';
+      statusEl.textContent = '❌ 提交失败：' + (result.error || '未知错误');
+      btn.disabled = false;
+      btn.textContent = '确认提交';
+      return;
+    }
+    statusEl.className = 'submit-status success';
+    statusEl.textContent = '✅ 班表已成功提交！管理员将在排班时参考您的可工作时段。';
+    document.getElementById('submit-btn').disabled = true;
+
+    // Save submission record locally
+    localStorage.setItem('last_submit_' + payload.year + '_' + payload.month, JSON.stringify({
+      name: payload.name,
+      submittedAt: payload.submittedAt
+    }));
+
+  } catch(err) {
+    closeSubmitModal();
+    statusEl.className = 'submit-status error';
+    statusEl.textContent = '❌ 提交失败，请检查网络连接后重试。';
+    btn.disabled = false;
+    btn.textContent = '确认提交';
+  }
+}
+
+// ── EXPORT (SVG-based) ──
+function buildRosterSVG() {
+  if (!state.rosterMonth) return null;
+  const { year: y, month: m } = state.rosterMonth;
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  const DAY_EN = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const MON_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  const firstDay = new Date(y, m-1, 1);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const startWd = (firstDay.getDay() + 6) % 7;
+
+  const weeks = [];
+  let week = new Array(7).fill(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const wd = (startWd + d - 1) % 7;
+    week[wd] = d;
+    if (wd === 6 || d === daysInMonth) { weeks.push([...week]); week = new Array(7).fill(null); }
+  }
+
+  const W = 900, LABEL_W = 52, COL_W = (W - LABEL_W) / 7;
+  const HEAD_H = 38, ROW_H = 28;
+  const WEEK_H = HEAD_H + ROW_H;
+  const TITLE_H = 36, PADDING = 2;
+  const H = TITLE_H + weeks.length * (WEEK_H + 3) + PADDING;
+
+  const headerBg = '#2d3f55', headerText = '#f0f4fa';
+  const headBg = '#c8d8e8', borderColor = '#1c2e40';
+  const fillFull = '#90c4e8';   // 全天：深蓝
+  const fillHalf = '#d0ecf8';   // 半天：浅蓝
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" font-family="Arial,sans-serif">`;
+
+  svg += `<rect width="${W}" height="${H}" fill="#f0f2f6"/>`;
+  svg += `<rect x="0" y="0" width="${W}" height="${TITLE_H}" fill="${headerBg}"/>`;
+  svg += `<text x="${W/2}" y="${TITLE_H*0.68}" text-anchor="middle" fill="${headerText}" font-size="14" font-weight="bold">${state.settings.name} · ${y}年${monthNames[m-1]} · 可工作时段</text>`;
+
+  const tableY = TITLE_H;
+  svg += `<rect x="0" y="${tableY}" width="${W}" height="${H - TITLE_H}" fill="none" stroke="${borderColor}" stroke-width="2"/>`;
+
+  weeks.forEach((week, wi) => {
+    const wy = tableY + wi * (WEEK_H + 3);
+
+    // ── 表头行 ──
+    svg += `<rect x="0" y="${wy}" width="${W}" height="${HEAD_H}" fill="${headBg}"/>`;
+    // 对角线
+    svg += `<line x1="0" y1="${wy}" x2="${LABEL_W}" y2="${wy+HEAD_H}" stroke="#8090b0" stroke-width="1"/>`;
+    svg += `<text x="${LABEL_W-4}" y="${wy+11}" text-anchor="end" fill="#6070a0" font-size="8">日期</text>`;
+    svg += `<text x="4" y="${wy+HEAD_H-5}" fill="#6070a0" font-size="8">姓名</text>`;
+    week.forEach((d, i) => {
+      const cx = LABEL_W + i * COL_W;
+      const dateStr = d ? `${d}-${MON_EN[m-1]}-${String(y).slice(2)}` : '';
+      svg += `<text x="${cx + COL_W/2}" y="${wy+16}" text-anchor="middle" fill="${borderColor}" font-size="11" font-weight="bold">${DAY_EN[i]}</text>`;
+      svg += `<text x="${cx + COL_W/2}" y="${wy+29}" text-anchor="middle" fill="#6070a0" font-size="9">${dateStr}</text>`;
+      if (i > 0) svg += `<line x1="${cx}" y1="${wy}" x2="${cx}" y2="${wy+HEAD_H}" stroke="${borderColor}" stroke-width="1.5"/>`;
+    });
+    // 分隔线（表头底部）
+    svg += `<line x1="0" y1="${wy+HEAD_H}" x2="${W}" y2="${wy+HEAD_H}" stroke="${borderColor}" stroke-width="1.5"/>`;
+    // 左侧标签列竖线
+    svg += `<line x1="${LABEL_W}" y1="${wy}" x2="${LABEL_W}" y2="${wy+WEEK_H}" stroke="${borderColor}" stroke-width="2"/>`;
+
+    // ── 时段行（单行）──
+    const rowY = wy + HEAD_H;
+    svg += `<rect x="0" y="${rowY}" width="${LABEL_W}" height="${ROW_H}" fill="${headBg}"/>`;
+    svg += `<text x="${LABEL_W/2}" y="${rowY + ROW_H*0.62}" text-anchor="middle" fill="#2d3f55" font-size="9" font-weight="bold">时段</text>`;
+
+    week.forEach((d, i) => {
+      const cx = LABEL_W + i * COL_W;
+      const slot = d ? getSlotForDate(y, m, d) : null;
+      const isOff = !slot || slot.type === 'off';
+      if (slot && !isOff) {
+        const dispType = slotDisplayType(slot);
+        const bg = dispType === 'full' ? fillFull : fillHalf;
+        svg += `<rect x="${cx+1}" y="${rowY+1}" width="${COL_W-2}" height="${ROW_H-2}" fill="${bg}"/>`;
+        // 时间文字
+        const textColor = '#1a3a5a';
+        svg += `<text x="${cx + COL_W/2}" y="${rowY + ROW_H*0.42}" text-anchor="middle" fill="${textColor}" font-size="9" font-weight="bold">${slot.start}</text>`;
+        svg += `<text x="${cx + COL_W/2}" y="${rowY + ROW_H*0.78}" text-anchor="middle" fill="${textColor}" font-size="9">${slot.end}</text>`;
+      } else if (isOff && d) {
+        // 禁止图标（圆圈+斜线）
+        const cx2 = cx + COL_W / 2;
+        const cy2 = rowY + ROW_H / 2;
+        const r = 7;
+        svg += `<circle cx="${cx2}" cy="${cy2}" r="${r}" fill="none" stroke="#b0b8c8" stroke-width="1.8"/>`;
+        svg += `<line x1="${cx2 - r*0.7}" y1="${cy2 - r*0.7}" x2="${cx2 + r*0.7}" y2="${cy2 + r*0.7}" stroke="#b0b8c8" stroke-width="1.8"/>`;
+      }
+      if (i > 0) svg += `<line x1="${cx}" y1="${rowY}" x2="${cx}" y2="${rowY+ROW_H}" stroke="${borderColor}" stroke-width="1.5"/>`;
+    });
+
+    // 周底部分隔线
+    svg += `<line x1="0" y1="${rowY+ROW_H}" x2="${W}" y2="${rowY+ROW_H}" stroke="${borderColor}" stroke-width="2"/>`;
+  });
+
+  svg += `</svg>`;
+  return { svg, W, H };
+}
+
+function svgToDataURL(svg) {
+  const encoded = btoa(unescape(encodeURIComponent(svg)));
+  return 'data:image/svg+xml;base64,' + encoded;
+}
+
+function renderSVGToCanvas(svg, W, H, scale) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f0f2f6';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, W * scale, H * scale);
+      resolve(canvas);
+    };
+    img.onerror = reject;
+    img.src = svgToDataURL(svg);
+  });
+}
+
+function exportPNG() {
+  const result = buildRosterSVG();
+  if (!result) return;
+  const { svg, W, H } = result;
+  const fname = `班表_${state.settings.name}_${state.rosterMonth.year}${String(state.rosterMonth.month).padStart(2,'0')}.png`;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  if (isIOS) {
+    const win = window.open('', '_blank');
+    if (!win) { alert('请在 Safari 设置中允许弹出式窗口'); return; }
+    win.document.write('<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;}p{color:#ccc;font-size:13px;font-family:sans-serif;padding:14px;text-align:center;}</style></head><body><p>生成中…</p></body></html>');
+    win.document.close();
+    renderSVGToCanvas(svg, W, H, 2).then(canvas => {
+      const dataURL = canvas.toDataURL('image/png');
+      win.document.body.innerHTML = `<img src="${dataURL}"><p>长按图片 → 存储到照片</p>`;
+    }).catch(() => { win.close(); alert('导出失败，请重试'); });
+  } else {
+    renderSVGToCanvas(svg, W, H, 2).then(canvas => {
+      const a = document.createElement('a');
+      a.download = fname;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    });
+  }
+}
+
+function exportPDF() {
+  const result = buildRosterSVG();
+  if (!result) return;
+  const { svg, W, H } = result;
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('请在 Safari 设置中允许弹出式窗口'); return; }
+  win.document.write('<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#fff;}p{font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;}</style></head><body><p>生成中…</p></body></html>');
+  win.document.close();
+
+  renderSVGToCanvas(svg, W, H, 2).then(canvas => {
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    win.document.body.innerHTML = `
+      <div style="font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;">
+        点右上角 <b>分享</b> → <b>打印</b> → 左下角预览图向上划 → 分享 → <b>存储为PDF</b>
+      </div>
+      <img src="${imgData}" style="width:100%;display:block;">`;
+  }).catch(() => { win.close(); alert('导出失败，请重试'); });
+}
+
+// ── THEMES ──
+const THEMES = {
+  slate: { bg:'#f0f2f6', surface:'#ffffff', border:'#b8c4d4', text:'#1a2230', muted:'#6070a0', accent:'#4a6080', accentLight:'#dde4f0', headerBg:'#2d3f55', headerText:'#f0f4fa', amBorder:'#8090b0', weekend:'#e4e8f4' },
+};
+
+function applyTheme(name) {
+  state.settings.theme = name;
+  const t = THEMES[name] || THEMES.slate;
+  const r = document.documentElement.style;
+  r.setProperty('--bg', t.bg);
+  r.setProperty('--surface', t.surface);
+  r.setProperty('--border', t.border);
+  r.setProperty('--text', t.text);
+  r.setProperty('--text-muted', t.muted);
+  r.setProperty('--accent', t.accent);
+  r.setProperty('--accent-light', t.accentLight);
+  r.setProperty('--accent-blue', t.accent);
+  r.setProperty('--accent-blue-light', t.accentLight);
+  r.setProperty('--header-bg', t.headerBg);
+  r.setProperty('--header-text', t.headerText);
+  r.setProperty('--am-border', t.amBorder);
+  r.setProperty('--cell-weekend', t.weekend);
+  document.querySelectorAll('.theme-swatch').forEach(b => {
+    b.classList.toggle('active', b.dataset.theme === name);
+  });
+  saveState();
+}
+
+// ── INIT ──
+loadState();
+initCalendar();
+renderCalendar();
+renderInlineSettings();
+setSlotMode('full');
+if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+  const tip = document.getElementById('ios-tip');
+  if (tip) tip.style.display = 'block';
+}
+applyTheme('slate');
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
