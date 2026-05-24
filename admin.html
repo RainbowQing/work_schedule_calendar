@@ -169,8 +169,9 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 .sched-tbl tbody tr.r-am td.dc { border-bottom: 1px dashed #aac8e0; }
 .sched-tbl tbody td.dc.sep { border-right: 2px solid #9ab8d4; }
 .sched-tbl tbody td.dc.empty { background: #e8eef6; cursor: default; border-right: 2px solid #9ab8d4; }
-.sched-tbl tbody td.dc.past { background: #f0f2f6 !important; cursor: default; opacity: 0.4; pointer-events: none; }
+.sched-tbl tbody td.dc.past { opacity: 0.6; } /* 过去日期轻微半透明，保留交互 */
 .sched-tbl tbody td.dc.no-avail { background: #fdf0f0; cursor: not-allowed; color: #e0b0b0; font-size: 11px; }
+.sched-tbl tbody td.dc.not-submitted { background: #f5f5f5; cursor: not-allowed; color: #bbb; font-size: 11px; border: 1px dashed #ccc; }
 .sched-tbl tbody td.dc.conflict { background: #fff3e0 !important; cursor: not-allowed; color: #e65100; font-size: 11px; }
 .sched-tbl tbody td.dc.avail { background: #eef6ff; }
 .sched-tbl tbody td.dc.avail:hover { background: #c8e4f8; }
@@ -189,13 +190,46 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 /* edit-mode remove btn */
 .emp-remove-btn { display: none; background: #c0392b; color: #fff; border: none; border-radius: 50%; width: 16px; height: 16px; font-size: 11px; line-height: 16px; cursor: pointer; margin-left: 4px; vertical-align: middle; padding: 0; }
 .edit-mode .emp-remove-btn { display: inline-block; }
+/* batch time edit mode */
+.batch-time-mode .td-name { cursor: pointer; user-select: none; }
+.batch-time-mode .td-name:hover { background: #e0f0ff !important; }
+.batch-time-mode .td-name.bt-selected { background: #bfdbfe !important; outline: 2px solid #2563eb; }
+.batch-time-mode .dc:not(.empty):not(.past):not(.not-submitted) { cursor: crosshair; }
+.sched-tbl td.dc.bt-cell-selected { outline: 2px solid #f59e0b !important; outline-offset: -2px; background: rgba(245,158,11,0.18) !important; }
+/* 编辑时间高亮预览 */
+.sched-tbl td.dc.bt-preview-start { outline: 2px solid #2563eb !important; outline-offset: -2px; background: rgba(37,99,235,0.15) !important; }
+.sched-tbl td.dc.bt-preview-end   { outline: 2px solid #7c3aed !important; outline-offset: -2px; background: rgba(124,58,237,0.15) !important; }
+/* 当前编辑时间周的行 */
+.sched-tbl tbody tr.bt-week-active > td.td-name { background: #fffbeb !important; }
+/* 时间改动：管理员设置超出员工填写范围的格子 */
+.sched-tbl td.dc.time-override-warn { position: relative; }
+.sched-tbl td.dc.time-override-warn::after {
+  content: '!';
+  position: absolute;
+  top: 1px; right: 2px;
+  font-size: 9px; font-weight: 700;
+  color: #d97706;
+  line-height: 1;
+  pointer-events: none;
+}
+/* 保存成功 toast */
+#save-toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  background: #1c4f80; color: #fff;
+  padding: 8px 22px; border-radius: 20px;
+  font-size: 13px; font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s;
+  z-index: 9999;
+}
 /* Legend */
 .sched-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; color: var(--text-muted); align-items: center; }
 .legend-box { width: 16px; height: 16px; border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 4px; }
 /* Export row */
 .export-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 /* Detail modal */
-.detail-modal-box { width: 560px; max-width: 96vw; }
+.detail-modal-box { width: 560px; max-width: 96vw; max-height: 90vh; display: flex; flex-direction: column; }
 .detail-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 12px; }
 .detail-cal-hdr { text-align: center; font-size: 10px; font-weight: 700; color: #5a7a9a; padding: 2px 0; }
 .detail-cal-day { border-radius: 4px; padding: 3px 2px; text-align: center; font-size: 11px; min-height: 32px; }
@@ -234,6 +268,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 }
 </style>
 <script src="config.js"></script>
+<script src="i18n.js"></script>
 </head>
 <body>
 
@@ -241,20 +276,21 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <div id="login-screen">
   <div class="login-box">
     <div class="login-logo">🗂️</div>
-    <div class="login-title">排班管理后台</div>
+    <div class="login-title" data-i18n="admin_login_title">排班管理后台</div>
     <div class="login-sub">Ume &amp; Comé 排班系统</div>
-    <input class="login-input" type="password" id="pw-input" placeholder="请输入管理员密码" onkeydown="if(event.key==='Enter')doLogin()">
-    <button class="login-btn" onclick="doLogin()">进入管理后台</button>
-    <button class="login-link" onclick="toggleChangePw()">修改密码</button>
+    <div style="text-align:right;margin-bottom:10px;" id="admin-login-lang-switch"></div>
+    <input class="login-input" type="password" id="pw-input" data-i18n="admin_login_pw_ph" data-i18n-attr="placeholder" placeholder="请输入管理员密码" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" data-i18n="admin_login_btn" onclick="doLogin()">进入管理后台</button>
+    <button class="login-link" data-i18n="nav_change_pw" onclick="toggleChangePw()">修改密码</button>
     <div class="login-error" id="login-error"></div>
 
     <!-- Change password panel -->
     <div class="changepw-panel" id="changepw-panel">
-      <div class="changepw-title">修改管理员密码</div>
-      <input class="login-input" type="password" id="old-pw" placeholder="当前密码" style="margin-bottom:8px;letter-spacing:0.1em;">
-      <input class="login-input" type="password" id="new-pw" placeholder="新密码（至少6位）" style="margin-bottom:8px;letter-spacing:0.1em;">
-      <input class="login-input" type="password" id="new-pw2" placeholder="再次输入新密码" style="margin-bottom:10px;letter-spacing:0.1em;">
-      <button class="login-btn" style="background:#1a7a4a;" onclick="doChangePassword()">确认修改密码</button>
+      <div class="changepw-title" data-i18n="cpw_title">修改管理员密码</div>
+      <input class="login-input" type="password" id="old-pw" data-i18n="cpw_old_ph" data-i18n-attr="placeholder" placeholder="当前密码" style="margin-bottom:8px;letter-spacing:0.1em;">
+      <input class="login-input" type="password" id="new-pw" data-i18n="cpw_new_ph" data-i18n-attr="placeholder" placeholder="新密码（至少6位）" style="margin-bottom:8px;letter-spacing:0.1em;">
+      <input class="login-input" type="password" id="new-pw2" data-i18n="cpw_new2_ph" data-i18n-attr="placeholder" placeholder="再次输入新密码" style="margin-bottom:10px;letter-spacing:0.1em;">
+      <button class="login-btn" style="background:#1a7a4a;" data-i18n="cpw_submit" onclick="doChangePassword()">确认修改密码</button>
       <div class="login-error" id="changepw-error"></div>
     </div>
   </div>
@@ -264,25 +300,26 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <div id="app">
   <nav class="topnav">
     <div class="topnav-left">
-      <span class="topnav-title">排班管理</span>
+      <span class="topnav-title" data-i18n="admin_title">排班管理</span>
       <span class="topnav-badge" id="month-badge">—</span>
     </div>
     <div class="topnav-tabs">
-      <button class="topnav-tab" onclick="showTab('employees')">员工管理</button>
-      <button class="topnav-tab active" onclick="showTab('submissions')">员工提交</button>
-      <button class="topnav-tab" onclick="showTab('locations')">地点标记</button>
-      <button class="topnav-tab" onclick="showTab('scheduling')">排班</button>
+      <button class="topnav-tab" data-i18n="tab_employees" onclick="showTab('employees')">员工管理</button>
+      <button class="topnav-tab active" data-i18n="tab_submissions" onclick="showTab('submissions')">员工提交</button>
+      <button class="topnav-tab" data-i18n="tab_locations" onclick="showTab('locations')">地点标记</button>
+      <button class="topnav-tab" data-i18n="tab_scheduling" onclick="showTab('scheduling')">排班</button>
     </div>
-    <div class="topnav-right">
-      <button class="logout-btn" onclick="openChangePwModal()">改密码</button>
-      <button class="logout-btn" onclick="doLogout()">退出</button>
+    <div class="topnav-right" style="display:flex;align-items:center;gap:6px;">
+      <span id="admin-nav-lang-switch"></span>
+      <button class="logout-btn" data-i18n="nav_change_pw" onclick="openChangePwModal()">改密码</button>
+      <button class="logout-btn" data-i18n="nav_logout" onclick="doLogout()">退出</button>
     </div>
   </nav>
 
   <!-- ── TAB: SUBMISSIONS ── -->
   <div class="view active" id="tab-submissions">
     <div class="month-picker">
-      <label style="font-size:13px;color:var(--text-muted);">查看月份：</label>
+      <label style="font-size:13px;color:var(--text-muted);" data-i18n="sub_month_label">查看月份：</label>
       <select id="sub-year" onchange="loadSubmissions()"></select>
       <select id="sub-month" onchange="loadSubmissions()">
         <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
@@ -292,7 +329,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
       </select>
       <button class="btn btn-primary btn-sm" onclick="loadSubmissions()">刷新</button>
     </div>
-    <div id="new-employee-notice" class="notice notice-warn" style="display:none;">
+    <div id="new-employee-notice" class="notice notice-warn" style="display:none;" data-i18n="sub_new_emp_notice">
       ⚠️ 有新员工提交了班表，请前往「地点标记」标记其工作地点。
     </div>
     <div class="card">
@@ -344,7 +381,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
       <select class="loc-select" id="sched-location" onchange="renderScheduleGrid()">
         <!-- populated dynamically from LOCATIONS -->
       </select>
-      <label style="font-size:13px;color:var(--text-muted);">月份：</label>
+      <label style="font-size:13px;color:var(--text-muted);" data-i18n="sched_month_label">月份：</label>
       <select id="sched-year" onchange="renderScheduleGrid()"></select>
       <select id="sched-month" onchange="renderScheduleGrid()">
         <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
@@ -352,17 +389,25 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
         <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
         <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
       </select>
-      <button class="btn btn-ghost btn-sm" id="edit-emp-btn" onclick="toggleEditMode()">✏️ 编辑员工</button>
-      <button class="btn btn-ghost btn-sm" onclick="openSettingsModal()">⚙️ 设置</button>
+      <button class="btn btn-primary btn-sm" data-i18n="sched_refresh" onclick="refreshScheduleGrid()" title="重新从服务器拉取最新数据并刷新排班表">刷新</button>
+      <button class="btn btn-ghost btn-sm" id="edit-emp-btn" data-i18n="sched_edit_emp" onclick="toggleEditMode()">✏️ 编辑员工</button>
+      <button class="btn btn-ghost btn-sm" data-i18n="sched_settings" onclick="openSettingsModal()">⚙️ 设置</button>
+      <button class="btn btn-ghost btn-sm" data-i18n="sched_save" id="manual-save-btn" onclick="manualSave()" title="立即保存所有数据">💾 保存</button><span id="save-indicator" style="font-size:14px;margin-left:2px;vertical-align:middle;"></span>
     </div>
 
     <div class="sched-legend">
-      <span><span class="legend-box" style="background:#eef6ff;border:1px solid #93c5fd;"></span> 可工作</span>
-      <span><span class="legend-box" style="background:#fdf0f0;border:1px solid #fca5a5;"></span> 不可工作</span>
-      <span><span class="legend-box" style="background:#fff3e0;border:1px solid #fb923c;"></span> 已在他处排班</span>
-      <span><span class="legend-box" style="background:#1c4f80;"></span> 已排班（第1人）</span>
-      <span><span class="legend-box" style="background:#10b981;"></span> 已排班（第2人）</span>
-      <span><span class="legend-box" style="background:#ffd700;border:1px solid #b8960a;"></span> 已确认排班</span>
+      <span><span class="legend-box" style="background:#f5f5f5;border:1px dashed #ccc;"></span> <span data-i18n="sched_legend_unsubmitted">未填写</span></span>
+      <span><span class="legend-box" style="background:#eef6ff;border:1px solid #93c5fd;"></span> <span data-i18n="sched_legend_avail">可工作</span></span>
+      <span><span class="legend-box" style="background:#fdf0f0;border:1px solid #fca5a5;"></span> <span data-i18n="sched_legend_unavail">不可工作</span></span>
+      <span><span class="legend-box" style="background:#fff3e0;border:1px solid #fb923c;"></span> <span data-i18n="sched_legend_elsewhere">已在他处排班</span></span>
+      <span><span class="legend-box" style="background:#1c4f80;"></span> <span data-i18n="sched_legend_p1">已排班（第1人）</span></span>
+      <span><span class="legend-box" style="background:#10b981;"></span> <span data-i18n="sched_legend_p2">已排班（第2人）</span></span>
+      <span><span class="legend-box" style="background:#ffd700;border:1px solid #b8960a;"></span> <span data-i18n="sched_legend_confirmed">已确认排班</span></span>
+      <span style="position:relative;display:inline-flex;align-items:center;gap:4px;">
+        <span class="legend-box" style="background:#eef6ff;border:1px solid #93c5fd;position:relative;">
+          <span style="position:absolute;top:0;right:1px;font-size:8px;font-weight:700;color:#d97706;line-height:1;">!</span>
+        </span> <span data-i18n="sched_legend_time_override">时间改动</span>
+      </span>
     </div>
 
     <div id="sched-notice" class="notice notice-warn" style="display:none;"></div>
@@ -381,20 +426,40 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
   <!-- ── TAB: EMPLOYEES ── -->
   <div class="view" id="tab-employees">
     <div class="card">
-      <div class="card-title">👥 员工管理
+      <div class="card-title"><span data-i18n="emp_mgmt_title">👥 员工管理</span>
         <span id="emp-mgmt-count" style="font-weight:400;font-size:12px;color:var(--text-muted);"></span>
       </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">管理所有曾提交过班表的在职员工。离职保留历史数据，全部删除清除所有记录。</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;" data-i18n="emp_mgmt_subtitle">管理在职员工账号。新建员工后员工可用姓名和默认密码（123456）登录员工端。</div>
+      <!-- 新增员工 -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+        <input type="text" id="new-emp-name-input" data-i18n="emp_mgmt_new_ph" data-i18n-attr="placeholder" placeholder="输入员工姓名" maxlength="20"
+          style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:14px;outline:none;"
+          onkeydown="if(event.key==='Enter')createNewEmployee()">
+        <button class="btn btn-primary btn-sm" data-i18n="emp_mgmt_new_btn" onclick="createNewEmployee()">＋ 新建员工</button>
+      </div>
       <div id="emp-mgmt-list"></div>
+    </div>
+
+    <!-- 地点管理 -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title"><span data-i18n="loc_title">📍 地点管理</span></div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">新增或删除工作地点，地点将同步显示在「地点标记」和「排班」界面。</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+        <input type="text" id="new-loc-input" data-i18n="loc_add_ph" data-i18n-attr="placeholder" placeholder="输入地点名称" maxlength="30"
+          style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:14px;outline:none;"
+          onkeydown="if(event.key==='Enter')addLocation()">
+        <button class="btn btn-primary btn-sm" data-i18n="loc_add_btn" onclick="addLocation()">＋ 添加地点</button>
+      </div>
+      <div id="loc-mgmt-list"></div>
     </div>
   </div>
 
 <!-- Detail modal -->
 <div class="modal-overlay" id="detail-modal">
   <div class="modal-box detail-modal-box">
-    <div class="modal-title" id="detail-modal-title">员工详情</div>
-    <div id="detail-modal-body"></div>
-    <div class="modal-actions" style="margin-top:14px;">
+    <div class="modal-title" id="detail-modal-title" style="flex-shrink:0;">员工详情</div>
+    <div id="detail-modal-body" style="overflow-y:auto;flex:1;min-height:0;padding-right:4px;"></div>
+    <div class="modal-actions" style="margin-top:14px;flex-shrink:0;">
       <button class="btn btn-primary" onclick="document.getElementById('detail-modal').classList.remove('open')">关闭</button>
     </div>
   </div>
@@ -423,19 +488,26 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <!-- Settings modal -->
 <div class="modal-overlay" id="settings-modal">
   <div class="modal-box" style="width:520px;max-height:90vh;overflow-y:auto;">
-    <div class="modal-title">⚙️ 排班设置</div>
+    <div class="modal-title" data-i18n="settings_title">⚙️ 排班设置</div>
 
-    <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">排班人数限制</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">每个地点每天每时段（上午/下午）最多可排班人数。</div>
+    <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;" data-i18n="settings_slot_limit">排班人数限制</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">每个地点每天最多可排班人数。</div>
     <div id="settings-limit-list" style="margin-bottom:18px;"></div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-top:14px;border-top:1px solid var(--border);" data-i18n="settings_default_time">默认上下班时间（用于标准化员工提交数据）</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;" data-i18n="settings_default_time_desc">
+      设置每个地点的标准工作时段。员工提交时间超出范围的端点自动调整为默认值，未超出的端点保持原样。<br>
+      例：默认 10:00–19:00，员工提交 07:00–15:00 → 自动调整为 10:00–15:00。
+    </div>
+    <div id="settings-loc-times-list" style="margin-bottom:18px;"></div>
 
     <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-top:14px;border-top:1px solid var(--border);">已确认班次管理</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">取消确认后，可对该周进行修改或清空重排。</div>
     <div id="settings-confirmed-list" style="margin-bottom:10px;max-height:200px;overflow-y:auto;"></div>
 
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="document.getElementById('settings-modal').classList.remove('open')">取消</button>
-      <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+      <button class="btn btn-ghost" data-i18n="settings_cancel" onclick="document.getElementById('settings-modal').classList.remove('open')">取消</button>
+      <button class="btn btn-primary" data-i18n="settings_save" onclick="saveSettings()">保存设置</button>
     </div>
   </div>
 </div>
@@ -443,14 +515,14 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <!-- Change password modal (in-app) -->
 <div class="modal-overlay" id="changepw-modal">
   <div class="modal-box">
-    <div class="modal-title">🔑 修改管理员密码</div>
-    <input class="login-input" type="password" id="modal-old-pw" placeholder="当前密码" style="margin-bottom:8px;">
-    <input class="login-input" type="password" id="modal-new-pw" placeholder="新密码（至少6位）" style="margin-bottom:8px;">
-    <input class="login-input" type="password" id="modal-new-pw2" placeholder="再次输入新密码" style="margin-bottom:4px;">
+    <div class="modal-title" data-i18n="cpw_title">🔑 修改管理员密码</div>
+    <input class="login-input" type="password" id="modal-old-pw" data-i18n="cpw_old_ph" data-i18n-attr="placeholder" placeholder="当前密码" style="margin-bottom:8px;">
+    <input class="login-input" type="password" id="modal-new-pw" data-i18n="cpw_new_ph" data-i18n-attr="placeholder" placeholder="新密码（至少6位）" style="margin-bottom:8px;">
+    <input class="login-input" type="password" id="modal-new-pw2" data-i18n="cpw_new2_ph" data-i18n-attr="placeholder" placeholder="再次输入新密码" style="margin-bottom:4px;">
     <div id="modal-pw-error" style="font-size:12px;color:#c0392b;min-height:18px;margin-bottom:4px;"></div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeChangePwModal()">取消</button>
-      <button class="btn btn-primary" onclick="doChangePasswordModal()">确认修改</button>
+      <button class="btn btn-ghost" data-i18n="cancel" onclick="closeChangePwModal()">取消</button>
+      <button class="btn btn-primary" data-i18n="cpw_submit" onclick="doChangePasswordModal()">确认修改</button>
     </div>
   </div>
 </div>
@@ -459,15 +531,18 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <div class="modal-overlay" id="edit-time-modal">
   <div class="modal-box" style="max-width:320px;">
     <div class="modal-title">修改排班时间</div>
-    <div id="edit-time-label" style="font-size:13px;color:var(--text-muted);margin-bottom:14px;"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-      <label style="font-size:13px;">开始时间<br>
-        <input type="time" id="edit-time-start" style="width:100%;margin-top:4px;font-family:inherit;font-size:14px;border:1.5px solid var(--border);border-radius:6px;padding:6px;">
+    <div id="edit-time-label" style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;"></div>
+    <div id="edit-time-fields" style="display:flex;gap:10px;margin-bottom:8px;">
+      <label id="edit-time-start-wrap" style="font-size:13px;flex:1;">开始时间<br>
+        <input type="text" id="edit-time-start" placeholder="如 08:00" maxlength="5"
+          style="width:100%;margin-top:4px;font-family:'DM Mono',monospace;font-size:15px;border:1.5px solid var(--border);border-radius:6px;padding:7px 8px;text-align:center;letter-spacing:0.05em;">
       </label>
-      <label style="font-size:13px;">结束时间<br>
-        <input type="time" id="edit-time-end" style="width:100%;margin-top:4px;font-family:inherit;font-size:14px;border:1.5px solid var(--border);border-radius:6px;padding:6px;">
+      <label id="edit-time-end-wrap" style="font-size:13px;flex:1;">结束时间<br>
+        <input type="text" id="edit-time-end" placeholder="如 19:00 / 24:00" maxlength="5"
+          style="width:100%;margin-top:4px;font-family:'DM Mono',monospace;font-size:15px;border:1.5px solid var(--border);border-radius:6px;padding:7px 8px;text-align:center;letter-spacing:0.05em;">
       </label>
     </div>
+    <div id="edit-time-error" style="font-size:12px;color:#c0392b;min-height:18px;margin-bottom:8px;"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeEditTimeModal()">取消</button>
       <button class="btn btn-primary" onclick="applyEditTime()">确认修改</button>
@@ -475,24 +550,67 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
   </div>
 </div>
 
+<!-- Save toast -->
+<div id="save-toast" data-i18n="sched_saved">✓ 数据已保存</div>
+
+<!-- Batch edit time panel (draggable, resizable floating panel) -->
+<div id="batch-edit-time-panel" style="display:none;position:fixed;z-index:2000;background:#ffffff;border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.18);min-width:280px;min-height:160px;width:340px;top:120px;right:40px;overflow:hidden;resize:both;">
+  <!-- Drag handle / title bar -->
+  <div id="batch-panel-titlebar" style="padding:10px 14px 8px;background:#1c4f80;color:#fff;cursor:move;display:flex;align-items:center;justify-content:space-between;user-select:none;border-radius:10px 10px 0 0;">
+    <span style="font-size:13px;font-weight:600;" data-i18n="time_panel_title">⏱️ 批量修改排班时间</span>
+    <button onclick="closeBatchEditTimeModal()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:14px;line-height:22px;cursor:pointer;padding:0;">✕</button>
+  </div>
+  <!-- Body -->
+  <div style="padding:12px 14px 14px;">
+    <div id="batch-edit-time-label" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;white-space:pre-line;"></div>
+    <!-- 全天/半天 单选 -->
+    <div id="batch-edit-daytype-row" style="display:none;margin-bottom:10px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;" data-i18n="time_panel_daytype">选择修改哪种工作时段：</div>
+      <div style="display:flex;gap:8px;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="batch-daytype" value="full" id="batch-daytype-full" onchange="onBatchDaytypeChange()"> <span data-i18n="time_panel_full">全天</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="batch-daytype" value="half" id="batch-daytype-half" onchange="onBatchDaytypeChange()"> <span data-i18n="time_panel_half">半天</span>
+        </label>
+      </div>
+    </div>
+    <div id="batch-edit-time-fields" style="display:flex;gap:10px;margin-bottom:8px;">
+      <label id="batch-edit-time-start-wrap" style="font-size:13px;flex:1;"><span data-i18n="time_panel_start">开始时间</span><br>
+        <input type="text" id="batch-edit-time-start" data-i18n="time_panel_start_ph" data-i18n-attr="placeholder" placeholder="如 08:00（留空不改）" maxlength="5" oninput="onBatchTimeInput()"
+          style="width:100%;margin-top:4px;font-family:'DM Mono',monospace;font-size:14px;border:1.5px solid var(--border);border-radius:6px;padding:6px 8px;text-align:center;letter-spacing:0.05em;">
+      </label>
+      <label id="batch-edit-time-end-wrap" style="font-size:13px;flex:1;"><span data-i18n="time_panel_end">结束时间</span><br>
+        <input type="text" id="batch-edit-time-end" data-i18n="time_panel_end_ph" data-i18n-attr="placeholder" placeholder="如 19:00（留空不改）" maxlength="5" oninput="onBatchTimeInput()"
+          style="width:100%;margin-top:4px;font-family:'DM Mono',monospace;font-size:14px;border:1.5px solid var(--border);border-radius:6px;padding:6px 8px;text-align:center;letter-spacing:0.05em;">
+      </label>
+    </div>
+    <div id="batch-edit-time-error" style="font-size:12px;color:#c0392b;min-height:16px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost btn-sm" data-i18n="time_panel_cancel" onclick="closeBatchEditTimeModal()">取消</button>
+      <button class="btn btn-primary btn-sm" data-i18n="time_panel_confirm" onclick="applyBatchEditTime()">确认修改</button>
+    </div>
+  </div>
+</div>
+
 <!-- Delete employee confirm modal -->
 <div class="modal-overlay" id="del-emp-modal">
   <div class="modal-box" style="max-width:380px;">
-    <div class="modal-title">删除员工</div>
+    <div class="modal-title" data-i18n="del_emp_title">删除员工</div>
     <div id="del-emp-name" style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text);"></div>
     <div style="font-size:13px;color:var(--text-muted);margin-bottom:18px;line-height:1.8;">请选择删除方式：</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px;">
       <button onclick="deleteEmployeeResigned(_delEmpTarget)" class="btn" style="text-align:left;padding:12px 14px;border:1.5px solid var(--border);border-radius:8px;background:#f8faff;font-family:inherit;">
-        <div style="font-weight:600;font-size:13px;margin-bottom:3px;">离职员工</div>
-        <div style="font-size:11px;color:var(--text-muted);">保留已确认班次、历史班次及地点标记数据，不再显示在员工管理和地点标记中</div>
+        <div style="font-weight:600;font-size:13px;margin-bottom:3px;" data-i18n="del_emp_resigned_label">离职员工</div>
+        <div style="font-size:11px;color:var(--text-muted);" data-i18n="del_emp_resigned_desc">保留已确认班次、历史班次及地点标记数据，不再显示在员工管理和地点标记中</div>
       </button>
       <button onclick="deleteEmployeeAll(_delEmpTarget)" class="btn btn-danger" style="text-align:left;padding:12px 14px;border-radius:8px;font-family:inherit;">
-        <div style="font-weight:600;font-size:13px;margin-bottom:3px;">全部删除</div>
-        <div style="font-size:11px;opacity:0.8;">完全删除所有数据，包括排班记录、地点标记和提交记录</div>
+        <div style="font-weight:600;font-size:13px;margin-bottom:3px;" data-i18n="del_emp_all_label">全部删除</div>
+        <div style="font-size:11px;opacity:0.8;" data-i18n="del_emp_all_desc">完全删除所有数据，包括排班记录、地点标记和提交记录</div>
       </button>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeDelEmpModal()">取消</button>
+      <button class="btn btn-ghost" data-i18n="cancel" onclick="closeDelEmpModal()">取消</button>
     </div>
   </div>
 </div>
@@ -501,7 +619,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <!-- Loading -->
 <div class="loading-overlay" id="loading">
   <div class="spinner"></div>
-  <div class="loading-text">加载中…</div>
+  <div class="loading-text" data-i18n="admin_loading">加载中…</div>
 </div>
 
 <script>
@@ -516,19 +634,17 @@ async function sha256(str) {
 const Backend = {
 
   _gasGet(params) {
-    const url = APPS_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+    const url = APPS_SCRIPT_URL + '?' + new URLSearchParams({ ...params, _t: Date.now() }).toString();
     return fetch(url).then(r => r.json());
   },
   _gasPost(body) {
-    // GAS: no-cors 无法读响应体，改用 cors 模式（需 GAS 返回正确 CORS 头）
-    // 实际上 GAS Web App 在 mode:'no-cors' 下永远返回 opaque response
-    // 对于写操作我们视为成功；对于需要返回值的操作（verifyPassword/getAdminState）
-    // GAS 已配置"所有人可访问"，直接用普通 fetch
+    // GAS 已配置"所有人可访问"，直接用普通 fetch（Content-Type: text/plain 避免 preflight）
     return fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // avoid CORS preflight
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(body)
-    }).then(r => r.json()).catch(() => ({ success: true }));
+    }).then(r => r.json());
+    // 注意：不再 catch 静默成功，让调用方（persistData/manualSave）感知真实失败
   },
   _localGet(params) {
     return fetch(LOCAL_API_URL + '?' + new URLSearchParams(params).toString()).then(r => r.json());
@@ -583,10 +699,46 @@ const Backend = {
     return this._gasGet({ action: 'verifyPassword', password });
   },
 
-  // 修改密码
+  // 修改管理员密码
   async changePassword(oldPassword, newPassword) {
     if (BACKEND_MODE === 'local') return this._localPost({ action: 'changePassword', oldPassword, newPassword });
     return this._gasPost({ action: 'changePassword', oldPassword, newPassword });
+  },
+
+  // 创建员工账号（默认密码 123456）
+  async createEmpAccount(name) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'createEmpAccount', name });
+    return this._gasPost({ action: 'createEmpAccount', name });
+  },
+
+  // 重置员工密码为默认密码
+  async resetEmpPassword(name) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'resetEmpPassword', name });
+    return this._gasPost({ action: 'resetEmpPassword', name });
+  },
+
+  // 删除员工账号
+  async deleteEmpAccount(name) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'deleteEmpAccount', name });
+    return this._gasPost({ action: 'deleteEmpAccount', name });
+  },
+
+  // 清除员工的 prev 提交记录（管理员已确认变动后调用）
+  async clearPrevSubmission(name, year, month) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'clearPrevSubmission', name, year, month });
+    return this._gasPost({ action: 'clearPrevSubmission', name, year, month });
+  },
+
+  // 读取指定地点+月份的排班表
+  async getSchedule(loc, year, month) {
+    if (BACKEND_MODE === 'local') return this._localGet({ action: 'getSchedule', loc, year, month });
+    return this._gasGet({ action: 'getSchedule', loc, year, month });
+  },
+
+  // 保存指定地点+月份的排班表（独立存储，不走 AdminState）
+  async saveSchedule(loc, year, month, schedule) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'saveSchedule', loc, year, month, schedule });
+    return this._gasPost({ action: 'saveSchedule', loc, year, month, schedule });
   },
 };
 
@@ -595,11 +747,12 @@ let appState = {
   loggedIn: false,
   submissions: {},   // 按月缓存：{ "year||month": [...] }
   locationMap: {},
-  schedules: {},
   currentTab: 'submissions',
   empOrder: {},
   empOverrides: {},
   slotLimits: {},
+  // 每个地点的默认上下班时间：{ "地点名": { defaultStart: "HH:MM", defaultEnd: "HH:MM" } }
+  locSettings: {},
   // confirmed weeks: key = "loc||year||month||weekIndex" → true
   confirmedWeeks: {},
   // 所有曾经提交过班表的员工集合（用于地点标记跨月保留）
@@ -611,7 +764,106 @@ let appState = {
   // 已永久删除员工集合：即使后端仍有提交记录，也不显示、不标记为新员工
   // 结构：{ "姓名": true }
   permanentlyDeleted: {},
+  // 地点列表（动态管理，初始值来自 config.js 的 LOCATIONS）
+  locations: null, // null 表示未从服务器加载，初始化时设为 LOCATIONS
+  // 员工账号：{ "姓名": { passwordHash: "sha256hex" } }
+  // 默认密码 123456 的 hash 在首次创建时写入
+  employeeAccounts: {},
+  // 提交数据快照：{ "year||month||name": scheduleJSON }
+  // 每次拉取新数据时与旧快照对比，检测重复提交是否有变化
+  submissionSnapshots: {},
+  // 有更新标记：{ "year||month||name": true }
+  submissionUpdated: {},
 };
+
+// ── SCHEDULE CACHE ────────────────────────────────────────────────
+// scheduleCache 替代原 appState.schedules，独立存储每个地点+月份的排班表
+// key 格式："loc||year||month"，value：{ loc, year, month, days:{}, timeOverrides:{}, _fetched:bool }
+const scheduleCache = {};
+const _scheduleSaveSnapshot = {}; // key → JSON string of {days, timeOverrides} at last Save
+
+function _schedCacheKey(loc, year, month) { return `${loc}||${year}||${month}`; }
+
+function _hasUnsavedChanges(loc, year, month) {
+  const key = _schedCacheKey(loc, year, month);
+  const cached = scheduleCache[key];
+  if (!cached || !cached._fetched) return false;
+  const snap = _scheduleSaveSnapshot[key];
+  const cur = JSON.stringify({ days: cached.days || {}, timeOverrides: cached.timeOverrides || {} });
+  return snap !== cur;
+}
+
+function _takeScheduleSaveSnapshot(loc, year, month) {
+  const key = _schedCacheKey(loc, year, month);
+  const cached = scheduleCache[key];
+  _scheduleSaveSnapshot[key] = cached
+    ? JSON.stringify({ days: cached.days || {}, timeOverrides: cached.timeOverrides || {} })
+    : JSON.stringify({ days: {}, timeOverrides: {} });
+}
+
+function _updateSaveIndicator() {
+  const loc = document.getElementById('sched-location') && document.getElementById('sched-location').value;
+  const year = parseInt(document.getElementById('sched-year') && document.getElementById('sched-year').value);
+  const month = parseInt(document.getElementById('sched-month') && document.getElementById('sched-month').value);
+  const el = document.getElementById('save-indicator');
+  if (!el || !loc || isNaN(year) || isNaN(month)) return;
+  if (_hasUnsavedChanges(loc, year, month)) {
+    el.textContent = '●';
+    el.title = getLang() === 'en' ? 'Unsaved changes' : '有未保存的修改';
+    el.style.color = '#e67e22';
+  } else {
+    el.textContent = '';
+    el.title = '';
+  }
+}
+
+// 从服务器拉取并缓存排班表（forceRefresh=true 时强制重新拉取）
+async function fetchAndCacheSchedule(loc, year, month, forceRefresh) {
+  const key = _schedCacheKey(loc, year, month);
+  if (!forceRefresh && scheduleCache[key] && scheduleCache[key]._fetched) return scheduleCache[key];
+  try {
+    const result = await Backend.getSchedule(loc, year, month);
+    const sched = (result && result.schedule) ? result.schedule : { days: {}, timeOverrides: {} };
+    if (!scheduleCache[key]) scheduleCache[key] = { loc, year, month, days: {}, timeOverrides: {} };
+    scheduleCache[key].days = sched.days || {};
+    scheduleCache[key].timeOverrides = sched.timeOverrides || {};
+    scheduleCache[key]._fetched = true;
+    // 建立保存快照（刚从服务器拉的，视为已保存状态）
+    if (!_scheduleSaveSnapshot[key]) _takeScheduleSaveSnapshot(loc, year, month);
+    return scheduleCache[key];
+  } catch(e) {
+    console.warn(`拉取排班表失败 ${key}:`, e);
+    if (!scheduleCache[key]) scheduleCache[key] = { loc, year, month, days: {}, timeOverrides: {}, _fetched: true };
+    return scheduleCache[key];
+  }
+}
+
+// 预拉取相邻月份的排班表（静默，不阻塞 UI）
+function _prefetchAdjacentMonths(loc, year, month) {
+  const prev = month === 1 ? { y: year-1, m: 12 } : { y: year, m: month-1 };
+  const next = month === 12 ? { y: year+1, m: 1 } : { y: year, m: month+1 };
+  fetchAndCacheSchedule(loc, prev.y, prev.m, false).catch(() => {});
+  fetchAndCacheSchedule(loc, next.y, next.m, false).catch(() => {});
+}
+
+// 保存当前地点+月份排班表到服务器
+async function saveScheduleToServer(loc, year, month) {
+  const key = _schedCacheKey(loc, year, month);
+  const cached = scheduleCache[key] || { days: {}, timeOverrides: {} };
+  const schedule = { days: cached.days || {}, timeOverrides: cached.timeOverrides || {} };
+  const result = await Backend.saveSchedule(loc, year, month, schedule);
+  if (!result || !result.success) throw new Error(result && result.error ? result.error : '保存失败');
+  _takeScheduleSaveSnapshot(loc, year, month);
+  _updateSaveIndicator();
+  return result;
+}
+
+// 获取当前地点列表（优先用 appState.locations，fallback 到 config.js 的 LOCATIONS）
+function getLocations() {
+  return appState.locations && appState.locations.length > 0
+    ? appState.locations
+    : (typeof LOCATIONS !== 'undefined' ? LOCATIONS : []);
+}
 
 // ── LOGIN ──
 function toggleChangePw() {
@@ -622,7 +874,7 @@ function toggleChangePw() {
 async function doLogin() {
   const pw = document.getElementById('pw-input').value;
   const btn = document.querySelector('#login-screen button');
-  if (btn) { btn.disabled = true; btn.textContent = '验证中…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('admin_login_verifying'); }
   try {
     const result = await Backend.verifyPassword(pw);
     if (result && result.success) {
@@ -630,16 +882,19 @@ async function doLogin() {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app').style.display = 'block';
       initApp();
+      initLangSwitchers();
+      populateMonthSelects();
+      applyI18n();
     } else {
-      document.getElementById('login-error').textContent = '密码错误，请重试。';
+      document.getElementById('login-error').textContent = t('admin_login_wrong');
       document.getElementById('pw-input').value = '';
       setTimeout(() => { document.getElementById('login-error').textContent = ''; }, 3000);
     }
   } catch(e) {
-    document.getElementById('login-error').textContent = '连接失败，请检查网络。';
+    document.getElementById('login-error').textContent = getLang() === 'en' ? 'Connection failed. Please check your network.' : '连接失败，请检查网络。';
     setTimeout(() => { document.getElementById('login-error').textContent = ''; }, 3000);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '登录'; }
+    if (btn) { btn.disabled = false; btn.textContent = t('admin_login_btn'); }
   }
 }
 document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
@@ -661,16 +916,16 @@ async function doChangePassword() {
   const newPw = document.getElementById('new-pw').value;
   const newPw2 = document.getElementById('new-pw2').value;
   const errEl = document.getElementById('changepw-error');
-  if (newPw.length < 6) { errEl.textContent = '新密码至少6位'; return; }
-  if (newPw !== newPw2) { errEl.textContent = '两次输入不一致'; return; }
+  if (newPw.length < 6) { errEl.textContent = t('cpw_min4'); return; }
+  if (newPw !== newPw2) { errEl.textContent = t('cpw_mismatch'); return; }
   try {
     const result = await Backend.changePassword(oldPw, newPw);
-    if (!result.success) { errEl.textContent = result.error || '当前密码错误'; return; }
+    if (!result.success) { errEl.textContent = result.error || t('cpw_wrong_old'); return; }
     errEl.style.color = '#1a7a4a';
-    errEl.textContent = '✓ 密码修改成功，请重新登录';
+    errEl.textContent = t('cpw_success');
     ['old-pw','new-pw','new-pw2'].forEach(id => document.getElementById(id).value = '');
     setTimeout(() => { errEl.textContent = ''; errEl.style.color = '#c0392b'; document.getElementById('changepw-panel').classList.remove('open'); doLogout(); }, 2500);
-  } catch(e) { errEl.textContent = '修改失败，请重试'; }
+  } catch(e) { errEl.textContent = getLang() === 'en' ? 'Change failed, please try again' : '修改失败，请重试'; }
 }
 
 function openChangePwModal() {
@@ -686,15 +941,43 @@ async function doChangePasswordModal() {
   const newPw = document.getElementById('modal-new-pw').value;
   const newPw2 = document.getElementById('modal-new-pw2').value;
   const errEl = document.getElementById('modal-pw-error');
-  if (newPw.length < 6) { errEl.textContent = '新密码至少6位'; return; }
-  if (newPw !== newPw2) { errEl.textContent = '两次输入不一致'; return; }
+  if (newPw.length < 6) { errEl.textContent = t('cpw_min4'); return; }
+  if (newPw !== newPw2) { errEl.textContent = t('cpw_mismatch'); return; }
   try {
     const result = await Backend.changePassword(oldPw, newPw);
-    if (!result.success) { errEl.textContent = result.error || '当前密码错误'; return; }
+    if (!result.success) { errEl.textContent = result.error || t('cpw_wrong_old'); return; }
     errEl.style.color = '#1a7a4a';
-    errEl.textContent = '✓ 密码已修改';
+    errEl.textContent = t('cpw_success');
     setTimeout(() => { closeChangePwModal(); errEl.style.color = '#c0392b'; doLogout(); }, 1800);
-  } catch(e) { errEl.textContent = '修改失败，请重试'; }
+  } catch(e) { errEl.textContent = getLang() === 'en' ? 'Change failed, please try again' : '修改失败，请重试'; }
+}
+
+// ── i18n HOOKS ──
+function populateMonthSelects() {
+  const months = t('cal_months');
+  ['sub-month', 'sched-month'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = months.map((m, i) => `<option value="${i+1}">${m}</option>`).join('');
+    sel.value = cur;
+  });
+}
+
+function initLangSwitchers() {
+  const loginSw = document.getElementById('admin-login-lang-switch');
+  if (loginSw) loginSw.innerHTML = langSwitchHTML();
+  const navSw = document.getElementById('admin-nav-lang-switch');
+  if (navSw) navSw.innerHTML = langSwitchHTML();
+}
+
+function onLangChanged(lang) {
+  initLangSwitchers();
+  populateMonthSelects();
+  renderScheduleGrid();
+  renderSubmissionsTable();
+  renderLocationTab();
+  renderEmpMgmt();
 }
 
 // ── INIT ──
@@ -711,26 +994,47 @@ function initApp() {
     }
   });
 
-  // Default to next month
+  // Default submissions to next month
   let nm = now.getMonth() + 2; let ny = yr;
   if (nm > 12) { nm = 1; ny++; }
   document.getElementById('sub-month').value = nm;
   if (ny !== yr) document.getElementById('sub-year').value = ny;
-  document.getElementById('sched-month').value = nm;
-  if (ny !== yr) document.getElementById('sched-year').value = ny;
+
+  // Focus month for scheduling: if ≤7 days left in current month → next month, else current month
+  const cm = now.getMonth() + 1;
+  const lastDayOfMonth = new Date(yr, cm, 0).getDate();
+  const daysToEnd = lastDayOfMonth - now.getDate();
+  let fm, fy;
+  if (daysToEnd <= 7) { fm = cm + 1; fy = yr; if (fm > 12) { fm = 1; fy++; } }
+  else { fm = cm; fy = yr; }
+  document.getElementById('sched-month').value = fm;
+  if (fy !== yr) document.getElementById('sched-year').value = fy;
+
+  // 初始化地点列表（加载服务器数据前先用 config.js 的值，避免空白）
+  if (!appState.locations || appState.locations.length === 0) {
+    appState.locations = typeof LOCATIONS !== 'undefined' ? [...LOCATIONS] : [];
+  }
 
   // Populate location selectors dynamically from LOCATIONS array
   const schedLocSel = document.getElementById('sched-location');
-  schedLocSel.innerHTML = LOCATIONS.map(l => `<option value="${l}">${l}</option>`).join('');
+  schedLocSel.innerHTML = getLocations().map(l => `<option value="${l}">${l}</option>`).join('');
 
   // Populate location table header dynamically
   const locHeader = document.getElementById('loc-table-header');
-  locHeader.innerHTML = `<th>姓名</th>` + LOCATIONS.map(l => `<th style="text-align:center;">${l}</th>`).join('');
+  locHeader.innerHTML = `<th>${t('emp_mgmt_col_name')}</th>` + getLocations().map(l => `<th style="text-align:center;">${l}</th>`).join('');
 
   showLoading(true);
   loadPersistedData().then(async () => {
     appState.persistedLoaded = true;
+    refreshLocationUI(); // 用加载后的地点列表刷新所有 UI
     renderLocationTab();
+    // 并行拉取所有地点的 focus month 排班表
+    const schedFm = parseInt(document.getElementById('sched-month').value);
+    const schedFy = parseInt(document.getElementById('sched-year').value);
+    const locs = getLocations();
+    await Promise.all(locs.map(loc => fetchAndCacheSchedule(loc, schedFy, schedFm, false)));
+    // 静默预拉取相邻月份
+    locs.forEach(loc => _prefetchAdjacentMonths(loc, schedFy, schedFm));
     renderScheduleGrid();
     await loadSubmissions();
     renderEmpMgmt();
@@ -739,12 +1043,41 @@ function initApp() {
 
 // ── PERSISTENCE ──
 // 数据通过后端 API 持久化，不依赖 localStorage（缓存清除不丢数据）
+function _loadLocalBackup() {
+  // 从 localStorage 备份恢复（GAS 不可用时的兜底）
+  try {
+    const s = localStorage.getItem('admin_state_backup_v1');
+    return s ? JSON.parse(s) : null;
+  } catch(e) { return null; }
+}
+
 async function loadPersistedData() {
   try {
     const result = await Backend.getAdminState();
-    const state = (result && result.state) ? result.state : {};
+    let state = (result && result.state) ? result.state : {};
+    // 如果 GAS 返回空（首次部署或请求异常），尝试用本地备份恢复
+    const hasData = state && (state.employeeAccounts || state.locationMap || state.schedules);
+    if (!hasData) {
+      const backup = _loadLocalBackup();
+      if (backup) {
+        console.warn('GAS 返回空数据，使用本地备份恢复');
+        state = backup;
+      }
+    }
     if (state.locationMap)   appState.locationMap   = state.locationMap;
-    if (state.schedules)     appState.schedules     = state.schedules;
+    // 迁移：旧版 AdminState 含 schedules 字段 → 迁移到 scheduleCache（标记为已保存状态）
+    if (state.schedules && typeof state.schedules === 'object') {
+      for (const [key, data] of Object.entries(state.schedules)) {
+        if (!scheduleCache[key]) {
+          scheduleCache[key] = { ...data, _fetched: true };
+          // 直接用 key 写入快照，避免 data.loc/year/month 与 key 不一致
+          _scheduleSaveSnapshot[key] = JSON.stringify({
+            days: data.days || {},
+            timeOverrides: data.timeOverrides || {}
+          });
+        }
+      }
+    }
     if (state.submissions) {
       // 兼容旧格式（数组）和新格式（对象按月缓存）
       if (Array.isArray(state.submissions)) {
@@ -761,36 +1094,98 @@ async function loadPersistedData() {
     if (state.empOrder)      appState.empOrder      = state.empOrder;
     if (state.empOverrides)  appState.empOverrides  = state.empOverrides;
     if (state.slotLimits)    appState.slotLimits    = state.slotLimits;
+    if (state.locSettings)   appState.locSettings   = state.locSettings;
     if (state.confirmedWeeks) appState.confirmedWeeks = state.confirmedWeeks;
     if (state.allEmployees)      appState.allEmployees      = state.allEmployees;
     if (state.resignedEmployees) appState.resignedEmployees = state.resignedEmployees;
     if (state.permanentlyDeleted) appState.permanentlyDeleted = state.permanentlyDeleted;
+    if (state.employeeAccounts)   appState.employeeAccounts   = state.employeeAccounts;
+    if (state.submissionSnapshots)     appState.submissionSnapshots     = state.submissionSnapshots;
+    if (state.submissionPrevSnapshots) appState.submissionPrevSnapshots = state.submissionPrevSnapshots;
+    if (state.submissionUpdated)       appState.submissionUpdated       = state.submissionUpdated;
+    // 地点列表：优先从服务器加载，fallback 到 config.js 的 LOCATIONS
+    if (state.locations && state.locations.length > 0) {
+      appState.locations = state.locations;
+    } else {
+      appState.locations = typeof LOCATIONS !== 'undefined' ? [...LOCATIONS] : [];
+    }
     // 向下兼容：如果没有 allEmployees，把 locationMap 中的员工名补入
     if (!state.allEmployees && state.locationMap) {
       Object.keys(state.locationMap).forEach(n => { appState.allEmployees[n] = true; });
+    }
+    // 加载后立即同步 localStorage，让同域名员工端可登录
+    if (state.employeeAccounts) {
+      try { localStorage.setItem('emp_accounts_v1', JSON.stringify(state.employeeAccounts)); } catch(e) {}
     }
   } catch(e) { console.warn('加载持久化数据失败:', e); }
 }
 
 // 防抖：避免每次点击都立即触发保存请求
 let _persistTimer = null;
+function _buildAdminState() {
+  return {
+    locationMap:    appState.locationMap,
+    submissions:    appState.submissions,
+    empOrder:       appState.empOrder,
+    empOverrides:   appState.empOverrides,
+    slotLimits:     appState.slotLimits,
+    locSettings:    appState.locSettings,
+    confirmedWeeks: appState.confirmedWeeks,
+    allEmployees:         appState.allEmployees,
+    resignedEmployees:    appState.resignedEmployees,
+    permanentlyDeleted:   appState.permanentlyDeleted,
+    employeeAccounts:     appState.employeeAccounts,
+    submissionSnapshots:     appState.submissionSnapshots,
+    submissionPrevSnapshots: appState.submissionPrevSnapshots || {},
+    submissionUpdated:       appState.submissionUpdated,
+    locations:               appState.locations,
+  };
+}
+
+function _backupStateLocally(state) {
+  // 把完整 state 存到 localStorage 作为兜底（GAS 请求失败时可恢复）
+  try { localStorage.setItem('admin_state_backup_v1', JSON.stringify(state)); } catch(e) {}
+  // 同步员工账号给员工端
+  try { localStorage.setItem('emp_accounts_v1', JSON.stringify(appState.employeeAccounts)); } catch(e) {}
+}
+
 function persistData() {
   clearTimeout(_persistTimer);
   _persistTimer = setTimeout(() => {
-    const state = {
-      locationMap:    appState.locationMap,
-      schedules:      appState.schedules,
-      submissions:    appState.submissions,
-      empOrder:       appState.empOrder,
-      empOverrides:   appState.empOverrides,
-      slotLimits:     appState.slotLimits,
-      confirmedWeeks: appState.confirmedWeeks,
-      allEmployees:       appState.allEmployees,
-      resignedEmployees:  appState.resignedEmployees,
-      permanentlyDeleted: appState.permanentlyDeleted,
-    };
+    const state = _buildAdminState();
+    _backupStateLocally(state);
     Backend.saveAdminState(state).catch(e => console.warn('保存数据失败:', e));
   }, 800); // 800ms 防抖
+  _updateSaveIndicator();
+}
+
+// 手动保存：立即触发（绕过防抖），显示 toast 确认
+let _saveToastTimer = null;
+async function manualSave() {
+  clearTimeout(_persistTimer);
+  _persistTimer = null;
+  const state = _buildAdminState();
+  _backupStateLocally(state);
+  const loc = document.getElementById('sched-location') && document.getElementById('sched-location').value;
+  const year = parseInt(document.getElementById('sched-year') && document.getElementById('sched-year').value);
+  const month = parseInt(document.getElementById('sched-month') && document.getElementById('sched-month').value);
+  try {
+    // 同时保存 AdminState 和当前排班表
+    await Promise.all([
+      Backend.saveAdminState(state),
+      (loc && !isNaN(year) && !isNaN(month)) ? saveScheduleToServer(loc, year, month) : Promise.resolve(),
+    ]);
+    const toast = document.getElementById('save-toast');
+    if (toast) {
+      toast.style.opacity = '1';
+      clearTimeout(_saveToastTimer);
+      _saveToastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+    }
+    _updateSaveIndicator();
+  } catch(e) {
+    console.warn('手动保存失败:', e);
+    alert(t('sched_save_fail'));
+  }
 }
 
 function getWeekConfirmKey(loc, year, month, weekIdx) {
@@ -824,7 +1219,7 @@ function showTab(name) {
   appState.currentTab = name;
   if (name === 'locations') renderLocationTab();
   if (name === 'scheduling') renderScheduleGrid();
-  if (name === 'employees') renderEmpMgmt();
+  if (name === 'employees') { renderEmpMgmt(); renderLocMgmt(); }
 }
 
 // ── SUBMISSIONS ──
@@ -833,19 +1228,92 @@ function getMonthSubs(year, month) {
   return appState.submissions[`${year}||${month}`] || [];
 }
 
+// 将员工提交的时间按地点默认时间标准化
+// 规则：超出默认范围的端点调整到默认值，未超出的保持原样
+function normalizeSubmissionTime(sub, loc) {
+  const ls = appState.locSettings[loc] || {};
+  const defStart = ls.defaultStart || '';
+  const defEnd   = ls.defaultEnd   || '';
+  if (!defStart && !defEnd) return sub; // 未设置默认时间，不处理
+  if (!sub.schedule) return sub;
+
+  const defSMins = defStart ? timeToMinsAdm(defStart) : -Infinity;
+  const defEMins = defEnd   ? timeToMinsAdm(defEnd)   : Infinity;
+
+  const normalizedSchedule = sub.schedule.map(day => {
+    if (!day.start || !day.end || day.slot === 'off') return day;
+    let sMins = timeToMinsAdm(day.start);
+    let eMins = timeToMinsAdm(day.end);
+
+    // 完全不在范围内（员工时间段与默认段无重叠）不调整
+    if (eMins <= defSMins || sMins >= defEMins) return day;
+
+    // 调整超出部分
+    let newStart = day.start;
+    let newEnd   = day.end;
+    if (defStart && sMins < defSMins) newStart = defStart;
+    if (defEnd   && eMins > defEMins) newEnd   = defEnd;
+
+    return { ...day, start: newStart, end: newEnd };
+  });
+  return { ...sub, schedule: normalizedSchedule };
+}
+
 // 从后端拉取指定月份数据并缓存，silent=true 时不显示 loading
+// 原始数据不做任何修改，时间标准化在渲染时按地点实时计算
 async function fetchAndCacheSubs(year, month, silent) {
   if (BACKEND_MODE === 'gas' && (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('YOUR_APPS_SCRIPT'))) return;
   if (!silent) showLoading(true);
   try {
     const data = await Backend.getSubmissions(year, month);
     if (data.submissions) {
+      if (!appState.submissionPrevSnapshots) appState.submissionPrevSnapshots = {};
+      const todayKey = getTodayKey();
+      data.submissions.forEach(s => {
+        const snapKey = `${year}||${month}||${s.name}`;
+        const newSnap = JSON.stringify(s.schedule);
+        const oldSnap = appState.submissionSnapshots[snapKey];
+
+        if (oldSnap !== undefined && oldSnap !== newSnap) {
+          // 检查"今天及以后"的日期是否有变化（过去日期的变化不触发已更新标记）
+          const oldSched = JSON.parse(oldSnap) || [];
+          const newSched = s.schedule || [];
+          const futureChanged = newSched.some(entry => {
+            if (entry.date < todayKey) return false; // 过去日期忽略
+            const oldEntry = oldSched.find(e => e.date === entry.date);
+            const oldSlot = oldEntry ? oldEntry.slot : 'off';
+            const newSlot = entry.slot || 'off';
+            const oldTime = oldEntry ? `${oldEntry.start||''}${oldEntry.end||''}` : '';
+            const newTime = `${entry.start||''}${entry.end||''}`;
+            return oldSlot !== newSlot || oldTime !== newTime;
+          });
+
+          if (futureChanged) {
+            // 今天及以后有变化 → 标记"已更新"，保存旧快照用于详情对比
+            appState.submissionUpdated[snapKey] = true;
+            appState.submissionPrevSnapshots[snapKey] = oldSnap;
+          }
+        }
+
+        // 关键修复：只在没有"已更新"待读标记时才推进快照
+        // 有标记时保持旧快照不动，直到管理员点开详情（clearUpdatedMark）后再更新
+        if (!appState.submissionUpdated[snapKey]) {
+          appState.submissionSnapshots[snapKey] = newSnap;
+        }
+      });
       appState.submissions[`${year}||${month}`] = data.submissions;
       data.submissions.forEach(s => { appState.allEmployees[s.name] = true; });
       persistData();
     }
   } catch(e) { if (!silent) alert('加载数据失败：' + e.message); }
   finally { if (!silent) showLoading(false); }
+}
+
+// 获取某员工在指定地点的提交数据（实时按该地点默认时间截取，不修改原始数据）
+function getSubForLoc(name, loc, year, month) {
+  const raw = getMonthSubs(year, month).find(s => s.name === name);
+  if (!raw) return null;
+  return normalizeSubmissionTime(raw, loc);
 }
 
 async function loadSubmissions() {
@@ -859,29 +1327,95 @@ async function loadSubmissions() {
 function renderSubmissionsTable() {
   const year = parseInt(document.getElementById('sub-year').value);
   const month = parseInt(document.getElementById('sub-month').value);
-  const allSubs = getMonthSubs(year, month);
-  // 永久删除的员工不显示在提交列表中
-  const subs = allSubs.filter(s => !appState.permanentlyDeleted[s.name]);
+  const submittedSubs = getMonthSubs(year, month).filter(s => !appState.permanentlyDeleted[s.name]);
+  const submittedMap = {};
+  submittedSubs.forEach(s => { submittedMap[s.name] = s; });
+
+  // 所有在职员工（allEmployees + locationMap + employeeAccounts + 已提交），排除离职/永久删除
+  const nameSet = new Set([
+    ...Object.keys(appState.allEmployees),
+    ...Object.keys(appState.locationMap),
+    ...Object.keys(appState.employeeAccounts),
+    ...submittedSubs.map(s => s.name),
+  ]);
+  const allAccountNames = [...nameSet].filter(n =>
+    !appState.permanentlyDeleted[n] && !appState.resignedEmployees[n]
+  );
+  allAccountNames.sort();
+
   const tbody = document.getElementById('sub-tbody');
-  document.getElementById('sub-count').textContent = `共 ${subs.length} 人提交`;
-  const hasNew = appState.persistedLoaded && subs.some(s => !appState.resignedEmployees[s.name] && !appState.permanentlyDeleted[s.name] && (!appState.locationMap[s.name] || appState.locationMap[s.name].length === 0));
+  const submittedCount = allAccountNames.filter(n => submittedMap[n]).length;
+  document.getElementById('sub-count').textContent = getLang() === 'en'
+    ? `${submittedCount} / ${allAccountNames.length} submitted`
+    : `${submittedCount} / ${allAccountNames.length} 人已提交`;
+
+  const hasNew = appState.persistedLoaded && submittedSubs.some(s =>
+    !appState.resignedEmployees[s.name] && !appState.permanentlyDeleted[s.name] &&
+    (!appState.locationMap[s.name] || appState.locationMap[s.name].length === 0));
   document.getElementById('new-employee-notice').style.display = hasNew ? 'block' : 'none';
-  if (subs.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted);">本月暂无员工提交</td></tr>'; return; }
-  tbody.innerHTML = subs.map(s => {
-    const workDays = s.schedule ? s.schedule.filter(d => d.slot !== 'off').length : 0;
-    const isNew = !appState.resignedEmployees[s.name] && !appState.permanentlyDeleted[s.name] && (!appState.locationMap[s.name] || appState.locationMap[s.name].length === 0);
-    const dots = s.schedule ? s.schedule.slice(0,31).map(d => {
+
+  if (allAccountNames.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted);">${getLang() === 'en' ? 'No staff found. Create staff in the Staff Management tab.' : '暂无员工记录，请在「员工管理」中创建'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = allAccountNames.map(name => {
+    const s = submittedMap[name];
+    const snapKey = `${year}||${month}||${name}`;
+    const hasAccount = !!appState.employeeAccounts[name];
+    const isUnsubmitted = !s;
+    const isUpdated = !isUnsubmitted && !!appState.submissionUpdated[snapKey];
+    const isNoLoc = s && !appState.resignedEmployees[name] && (!appState.locationMap[name] || appState.locationMap[name].length === 0);
+
+    // 姓名列徽章
+    let badge = '';
+    if (isUpdated) badge = `<span style="font-size:10px;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;margin-left:6px;">${t('sub_updated_badge')}</span>`;
+    else if (isNoLoc) badge = `<span class="new-badge">${getLang() === 'en' ? 'New' : '新'}</span>`;
+
+    // 提交时间列
+    let submittedStr;
+    if (!isUnsubmitted) {
+      submittedStr = s.submittedAt
+        ? new Date(s.submittedAt).toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
+        : '—';
+    } else if (!hasAccount) {
+      submittedStr = `<span style="color:#bbb;font-size:12px;">${t('sub_no_account')}</span>`;
+    } else {
+      submittedStr = `<span style="color:#aaa;font-size:12px;">${t('sub_not_submitted')}</span>`;
+    }
+
+    // 可工作天数 + 点阵
+    const workDays = s && s.schedule ? s.schedule.filter(d => d.slot !== 'off').length : '—';
+    const dots = s && s.schedule ? s.schedule.slice(0,31).map(d => {
       const cls = d.slot==='full'?'dot-full':d.slot==='am'?'dot-am':d.slot==='pm'?'dot-pm':'dot-off';
       return `<span class="avail-dot ${cls}" title="${d.date}: ${d.slot}"></span>`;
     }).join('') : '';
-    const submittedStr = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-    return `<tr>
-      <td class="name-cell" ${appState.resignedEmployees[s.name]?'style="color:#aaa;"':''}>${s.name}${isNew?'<span class="new-badge">新</span>':appState.resignedEmployees[s.name]?'<span style="font-size:10px;background:#eee;color:#999;border-radius:10px;padding:1px 7px;margin-left:6px;">已离职</span>':''}</td>
-      <td>${submittedStr}</td><td><b>${workDays}</b> 天</td>
+
+    const safeName = name.replace(/'/g,"\\'");
+    const detailBtn = isUnsubmitted ? '' : `<button class="btn btn-ghost btn-sm" onclick="viewPersonDetail('${safeName}')">${t('sub_detail_btn')}</button>`;
+
+    const rowStyle = isUnsubmitted ? 'style="opacity:0.55;"' : '';
+    const daysStr = isUnsubmitted ? '<span style="color:#ccc;">—</span>' : `<b>${workDays}</b> ${getLang() === 'en' ? 'days' : '天'}`;
+    return `<tr ${rowStyle}>
+      <td class="name-cell">${name}${badge}</td>
+      <td>${submittedStr}</td>
+      <td>${daysStr}</td>
       <td><div class="avail-dots">${dots}</div></td>
-      <td><button class="btn btn-ghost btn-sm" onclick="viewPersonDetail('${s.name}')">详情</button></td>
+      <td>${detailBtn}</td>
     </tr>`;
   }).join('');
+}
+
+// 清除某员工的"已更新"标记（点开详情后自动清除），同时把快照推进到当前最新
+function clearUpdatedMark(name, year, month) {
+  const snapKey = `${year}||${month}||${name}`;
+  if (appState.submissionUpdated[snapKey]) {
+    delete appState.submissionUpdated[snapKey];
+    // 把快照更新为当前最新版（下次fetch对比的基准）
+    const sub = getMonthSubs(year, month).find(s => s.name === name);
+    if (sub) appState.submissionSnapshots[snapKey] = JSON.stringify(sub.schedule);
+    persistData();
+  }
 }
 
 function viewPersonDetail(name) {
@@ -890,50 +1424,126 @@ function viewPersonDetail(name) {
   const sub = getMonthSubs(year, month).find(s => s.name===name);
   if (!sub) return;
 
-  const slotLabel = {full:'全天',am:'上午',pm:'下午',off:'休息'};
+  const snapKey = `${year}||${month}||${name}`;
+  const isUpdated = !!appState.submissionUpdated[snapKey];
+
+  // 读取旧快照（"已更新"时才有意义）
+  // 快照在 fetchAndCacheSubs 拉取新数据前的版本，存在 submissionSnapshots 里
+  // 但我们只存了最新快照。需要单独存"上一版"才能对比。
+  // 实现方式：在 fetchAndCacheSubs 里，检测到变化时同时保存旧快照到 submissionPrevSnapshots
+  const prevSnapJSON = appState.submissionPrevSnapshots && appState.submissionPrevSnapshots[snapKey];
+  const prevSchedule = prevSnapJSON ? JSON.parse(prevSnapJSON) : null;
+
+  const slotLabel = getLang() === 'en'
+    ? {full:'Full Day',half:'Half Day',am:'AM',pm:'PM',off:'Day Off',custom:'Custom'}
+    : {full:'全天',half:'半天',am:'上午',pm:'下午',off:'休息',custom:'自定义'};
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month-1, 1);
-  const startWd = (firstDay.getDay()+6)%7; // 0=Mon
-  const DAY_HDRS = ['一','二','三','四','五','六','日'];
+  const startWd = (firstDay.getDay()+6)%7;
+  const DAY_HDRS = getLang()==='en' ? ['M','T','W','T','F','S','S'] : ['一','二','三','四','五','六','日'];
 
-  // Text summary
-  const workDays = sub.schedule.filter(d=>d.slot!=='off')
-    .map(d=>`${d.date}（${slotLabel[d.slot]}）`).join('　');
+  // 计算变化列表（只对比今天及以后的日期，过去日期沿用历史不算变化）
+  const detailTodayKey = getTodayKey();
+  let changesHtml = '';
+  if (isUpdated && prevSchedule) {
+    const changes = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateKey = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if (dateKey < detailTodayKey) continue; // 过去日期不计入变化
+      const newEntry = sub.schedule ? sub.schedule.find(e => e.date === dateKey) : null;
+      const oldEntry = prevSchedule.find(e => e.date === dateKey);
+      const newSlot = newEntry ? newEntry.slot : 'off';
+      const oldSlot = oldEntry ? oldEntry.slot : 'off';
+      const newTime = newEntry && newEntry.start && newEntry.end ? ` ${fmtTime(newEntry.start)}–${fmtTime(newEntry.end)}` : '';
+      const oldTime = oldEntry && oldEntry.start && oldEntry.end ? ` ${fmtTime(oldEntry.start)}–${fmtTime(oldEntry.end)}` : '';
+      const newDesc = (slotLabel[newSlot] || newSlot) + newTime;
+      const oldDesc = (slotLabel[oldSlot] || oldSlot) + oldTime;
+      if (newSlot !== oldSlot || newTime !== oldTime) {
+        const [yy, mm, dd] = dateKey.split('-');
+        const dayLabel = getLang() === 'en'
+          ? `${new Date(parseInt(yy), parseInt(mm)-1, parseInt(dd)).toLocaleDateString('en-US', {month:'short',day:'numeric'})}`
+          : `${parseInt(mm)}月${parseInt(dd)}日`;
+        changes.push(`<li style="margin-bottom:4px;"><b>${dayLabel}</b>：
+          <span style="color:#c0392b;text-decoration:line-through;">${oldDesc}</span>
+          → <span style="color:#1a7a4a;">${newDesc}</span></li>`);
+      }
+    }
+    if (changes.length > 0) {
+      changesHtml = `<div style="background:#fff8e1;border:1px solid #f0c040;border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:700;color:#a07800;margin-bottom:6px;">⚡ ${t('sub_changes_title', {count: changes.length})}</div>
+        <ul style="font-size:12px;line-height:1.8;padding-left:16px;margin:0;">${changes.join('')}</ul>
+      </div>`;
+    } else {
+      changesHtml = `<div style="background:#f0faf4;border:1px solid #a0d8b0;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:#1a7a4a;">
+        ✅ ${t('sub_no_changes')}
+      </div>`;
+    }
+  }
 
-  // Build calendar HTML
+  // Build calendar HTML（变化的日期高亮边框）
+  const changedDates = new Set();
+  if (isUpdated && prevSchedule) {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateKey = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if (dateKey < detailTodayKey) continue; // 过去日期不高亮
+      const newEntry = sub.schedule ? sub.schedule.find(e => e.date === dateKey) : null;
+      const oldEntry = prevSchedule.find(e => e.date === dateKey);
+      const newSlot = newEntry ? newEntry.slot : 'off';
+      const oldSlot = oldEntry ? oldEntry.slot : 'off';
+      const newTime = newEntry && newEntry.start && newEntry.end ? `${newEntry.start}${newEntry.end}` : '';
+      const oldTime = oldEntry && oldEntry.start && oldEntry.end ? `${oldEntry.start}${oldEntry.end}` : '';
+      if (newSlot !== oldSlot || newTime !== oldTime) changedDates.add(dateKey);
+    }
+  }
+
   let cal = `<div class="detail-cal">`;
   DAY_HDRS.forEach(h => { cal += `<div class="detail-cal-hdr">${h}</div>`; });
-  // empty cells before first day
-  for (let i=0;i<startWd;i++) cal += `<div class="detail-cal-day d-empty"></div>`;
-  for (let d=1;d<=daysInMonth;d++) {
+  for (let i = 0; i < startWd; i++) cal += `<div class="detail-cal-day d-empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
     const dateKey = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const entry = sub.schedule ? sub.schedule.find(e=>e.date===dateKey) : null;
+    const entry = sub.schedule ? sub.schedule.find(e => e.date === dateKey) : null;
     const slot = entry ? entry.slot : 'off';
-    const isWorking = (slot && slot !== 'off');
+    const isWorking = slot && slot !== 'off';
     const cls = isWorking ? 'd-full' : 'd-off';
-    const timeRange = entry && entry.start && entry.end ? `${entry.start}–${entry.end}` : (isWorking ? '全天' : '');
-    const lbl = timeRange;
-    cal += `<div class="detail-cal-day ${cls}">
+    const timeRange = entry && entry.start && entry.end
+      ? `${fmtTime(entry.start)}–${fmtTime(entry.end)}` : (isWorking ? t('cal_slot_full') : '');
+    const changedStyle = changedDates.has(dateKey) ? ' style="outline:2px solid #e67e22;outline-offset:-2px;"' : '';
+    cal += `<div class="detail-cal-day ${cls}"${changedStyle}>
       <span class="d-num">${d}</span>
-      ${lbl?`<span class="d-lbl">${lbl}</span>`:''}
+      ${timeRange ? `<span class="d-lbl">${timeRange}</span>` : ''}
     </div>`;
   }
   cal += `</div>`;
 
-  // Legend
   const legend = `<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin-top:10px;color:var(--text-muted);">
-    <span><span style="display:inline-block;width:10px;height:10px;background:#1c4f80;border-radius:2px;margin-right:3px;"></span>可工作</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#1c4f80;border-radius:2px;margin-right:3px;"></span>全天</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#f0f4fa;border-radius:2px;margin-right:3px;border:1px solid #ddd;"></span>休息</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#1c4f80;border-radius:2px;margin-right:3px;"></span>${t('sub_legend_work')}</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#f0f4fa;border-radius:2px;margin-right:3px;border:1px solid #ddd;"></span>${t('sub_legend_off')}</span>
+    ${isUpdated && changedDates.size > 0 ? `<span><span style="display:inline-block;width:10px;height:10px;border:2px solid #e67e22;border-radius:2px;margin-right:3px;"></span>${t('sub_legend_changed')}</span>` : ''}
   </div>`;
 
-  const textSummary = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.8;">
-    ${workDays || '<span style="color:#aaa;">本月无可工作时间</span>'}
-  </div>`;
+  // 员工备注
+  let noteHtml = '';
+  if (sub.note && sub.note.trim()) {
+    noteHtml = `<div style="background:#f0f4ff;border:1px solid #b0c4ef;border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:700;color:#2c5282;margin-bottom:4px;">💬 ${t('sub_note_title')}</div>
+      <div style="font-size:13px;color:#2d3748;white-space:pre-wrap;">${sub.note.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+    </div>`;
+  }
 
-  document.getElementById('detail-modal-title').textContent = `${name} — ${year}年${month}月 可工作时段`;
-  document.getElementById('detail-modal-body').innerHTML = textSummary + cal + legend;
+  const titleSuffix = isUpdated ? ` ${t('sub_updated_suffix')}` : '';
+  const months = t('cal_months');
+  const modalTitle = getLang() === 'en'
+    ? `${name} — ${months[month-1]} ${year} · ${t('sub_detail_title_work')}${titleSuffix}`
+    : `${name} — ${year}年${month}月 ${t('sub_detail_title_work')}${titleSuffix}`;
+  document.getElementById('detail-modal-title').textContent = modalTitle;
+  document.getElementById('detail-modal-body').innerHTML = noteHtml + changesHtml + cal + legend;
   document.getElementById('detail-modal').classList.add('open');
+
+  // 点开详情即清除"已更新"标记，并刷新列表
+  if (isUpdated) {
+    clearUpdatedMark(name, year, month);
+    renderSubmissionsTable();
+  }
 }
 
 
@@ -948,14 +1558,18 @@ function renderLocationTab() {
   // 过滤已离职员工（不在地点标记中显示）
   const names = [...nameSet].filter(n => !appState.resignedEmployees[n]).sort();
   const tbody = document.getElementById('loc-tbody');
-  const colSpan = LOCATIONS.length + 1;
+  const locs = getLocations();
+  const colSpan = locs.length + 1;
+  // 同步更新地点表头
+  const locHeader = document.getElementById('loc-table-header');
+  if (locHeader) locHeader.innerHTML = `<th>${t('emp_mgmt_col_name')}</th>` + locs.map(l => `<th style="text-align:center;">${l}</th>`).join('');
   if (names.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:32px;color:var(--text-muted);">请先在「员工提交」页面加载员工数据</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:32px;color:var(--text-muted);">${t('loc_empty_state')}</td></tr>`;
     return;
   }
   tbody.innerHTML = names.map(name => {
     const assigned = appState.locationMap[name] || [];
-    const cells = LOCATIONS.map((loc,i) => {
+    const cells = locs.map((loc,i) => {
       const isActive = assigned.includes(loc);
       return `<td style="text-align:center;padding:8px;">
         <button class="loc-tag ${isActive?'active-'+(i%6):'inactive'}" onclick="toggleLocation('${name.replace(/'/g,"\\'")}','${loc}')">${isActive?'✓':'+'}</button>
@@ -975,7 +1589,7 @@ function toggleLocation(name, loc) {
     // Removing this person from this location:
     // clear their assignments in ALL schedule entries for this specific location
     arr.splice(idx, 1);
-    for (const [key, data] of Object.entries(appState.schedules)) {
+    for (const [key, data] of Object.entries(scheduleCache)) {
       if (data.loc !== loc) continue;
       for (const slotKey of Object.keys(data.days)) {
         data.days[slotKey] = data.days[slotKey].filter(n => n !== name);
@@ -990,49 +1604,211 @@ function toggleLocation(name, loc) {
   renderScheduleGrid();
   // Show brief confirmation
   const msg = document.getElementById('loc-save-msg');
-  msg.textContent = '✓ 已自动保存并同步排班';
+  msg.textContent = getLang() === 'en' ? '✓ Auto-saved and synced' : '✓ 已自动保存并同步排班';
   clearTimeout(msg._t);
   msg._t = setTimeout(() => { msg.textContent = ''; }, 2000);
+}
+
+// ── 地点管理 ──────────────────────────────────────────────────────
+function refreshLocationUI() {
+  // 同步排班地点下拉框
+  const sel = document.getElementById('sched-location');
+  if (sel) sel.innerHTML = getLocations().map(l => `<option value="${l}">${l}</option>`).join('');
+  // 同步地点标记表头
+  const locHeader = document.getElementById('loc-table-header');
+  if (locHeader) locHeader.innerHTML = `<th>${t('emp_mgmt_col_name')}</th>` + getLocations().map(l => `<th style="text-align:center;">${l}</th>`).join('');
+  // 刷新地点管理 UI
+  renderLocMgmt();
+}
+
+function renderLocMgmt() {
+  const el = document.getElementById('loc-mgmt-list');
+  if (!el) return;
+  const locs = getLocations();
+  if (locs.length === 0) {
+    el.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px;">暂无地点</div>`;
+    return;
+  }
+  el.innerHTML = locs.map((loc, i) => {
+    const safeLoc = loc.replace(/'/g, "\\'");
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);font-size:14px;">
+      <span>${loc}</span>
+      <button class="btn btn-danger btn-sm" style="font-size:11px;" onclick="deleteLocation('${safeLoc}')">删除</button>
+    </div>`;
+  }).join('');
+}
+
+function addLocation() {
+  const inp = document.getElementById('new-loc-input');
+  const name = inp.value.trim();
+  if (!name) { inp.focus(); return; }
+  const locs = getLocations();
+  if (locs.includes(name)) { alert(getLang()==='en' ? `Location "${name}" already exists` : `地点"${name}"已存在`); return; }
+  appState.locations = [...locs, name];
+  inp.value = '';
+  persistData();
+  refreshLocationUI();
+  renderLocationTab();
+  showMsg(getLang()==='en' ? `✅ Location "${name}" added` : `✅ 已添加地点"${name}"`);
+}
+
+function deleteLocation(loc) {
+  const locs = getLocations();
+  if (!locs.includes(loc)) return;
+  // 检查是否有员工在此地点
+  const hasAssigned = Object.values(appState.locationMap).some(arr => arr.includes(loc));
+  const hasSchedule = Object.values(scheduleCache).some(d => d.loc === loc && Object.values(d.days).some(arr => arr.length > 0));
+  if (hasAssigned || hasSchedule) {
+    if (!confirm(getLang()==='en' ? `Location "${loc}" still has staff assignments or schedule data. All related data will be removed. Continue?` : `地点"${loc}"仍有员工标记或排班数据，删除后相关数据也会清除，确定继续吗？`)) return;
+    // 清除员工地点标记
+    for (const name of Object.keys(appState.locationMap)) {
+      appState.locationMap[name] = (appState.locationMap[name] || []).filter(l => l !== loc);
+    }
+    // 清除该地点的排班数据
+    for (const key of Object.keys(scheduleCache)) {
+      if (scheduleCache[key].loc === loc) delete scheduleCache[key];
+    }
+  } else {
+    if (!confirm(getLang()==='en' ? `Delete location "${loc}"?` : `确定删除地点"${loc}"吗？`)) return;
+  }
+  appState.locations = locs.filter(l => l !== loc);
+  // 清除该地点的设置
+  if (appState.locSettings) delete appState.locSettings[loc];
+  persistData();
+  refreshLocationUI();
+  renderLocationTab();
+  renderScheduleGrid();
+  showMsg(getLang()==='en' ? `✅ Location "${loc}" deleted` : `✅ 已删除地点"${loc}"`);
 }
 
 function renderEmpMgmt() {
   const names = [...new Set([
     ...Object.keys(appState.allEmployees),
     ...Object.keys(appState.locationMap),
-  ])].filter(n => !appState.resignedEmployees[n]).sort();
+    ...Object.keys(appState.employeeAccounts),
+  ])].filter(n => !appState.resignedEmployees[n] && !appState.permanentlyDeleted[n]).sort();
   const countEl = document.getElementById('emp-mgmt-count');
-  if (countEl) countEl.textContent = `共 ${names.length} 人`;
+  if (countEl) countEl.textContent = getLang() === 'en' ? `${names.length} staff` : `共 ${names.length} 人`;
   const list = document.getElementById('emp-mgmt-list');
   if (names.length === 0) {
-    list.innerHTML = `<div style="color:var(--text-muted);font-size:13px;padding:32px 0;text-align:center;">暂无员工记录</div>`;
+    list.innerHTML = `<div style="color:var(--text-muted);font-size:13px;padding:32px 0;text-align:center;">${t('emp_mgmt_empty')}</div>`;
     return;
   }
   list.innerHTML = `<table style="width:100%;border-collapse:collapse;">
     <thead><tr style="font-size:12px;color:var(--text-muted);border-bottom:2px solid var(--border);">
-      <th style="text-align:left;padding:8px 12px;font-weight:600;">姓名</th>
-      <th style="text-align:left;padding:8px 12px;font-weight:600;">工作地点</th>
-      <th style="text-align:right;padding:8px 12px;font-weight:600;">操作</th>
+      <th style="text-align:left;padding:8px 12px;font-weight:600;">${t('emp_mgmt_col_name')}</th>
+      <th style="text-align:left;padding:8px 12px;font-weight:600;">${t('emp_mgmt_col_location')}</th>
+      <th style="text-align:left;padding:8px 12px;font-weight:600;">${t('emp_mgmt_col_account')}</th>
+      <th style="text-align:right;padding:8px 12px;font-weight:600;">${t('emp_mgmt_col_action')}</th>
     </tr></thead>
     <tbody>${names.map(name => {
       const locs = appState.locationMap[name] || [];
-      const locStr = locs.length ? locs.join('、') : '<span style="color:#aaa;">未分配地点</span>';
+      const locStr = locs.length ? locs.join('、') : `<span style="color:#aaa;">${t('emp_mgmt_no_loc')}</span>`;
+      const hasAccount = !!appState.employeeAccounts[name];
+      const accountBadge = hasAccount
+        ? `<span style="color:#1a7a4a;font-size:12px;">${t('emp_mgmt_has_account')}</span>`
+        : `<span style="color:#aaa;font-size:12px;">${t('emp_mgmt_no_account')}</span>`;
       const safeName = name.replace(/'/g,"\\'");
+      const resetBtn = hasAccount
+        ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="resetEmpPassword('${safeName}')">${t('emp_mgmt_reset_pw')}</button> `
+        : `<button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="createAccountForEmp('${safeName}')">${t('emp_mgmt_create_account')}</button> `;
       return `<tr style="border-bottom:1px solid #eef0f4;">
         <td style="padding:12px 12px;font-size:14px;font-weight:600;">${name}</td>
         <td style="padding:12px 12px;font-size:12px;color:var(--text-muted);">${locStr}</td>
-        <td style="padding:12px 12px;text-align:right;">
-          <button class="btn btn-danger btn-sm" onclick="confirmDeleteEmployee('${safeName}')">删除</button>
+        <td style="padding:12px 12px;">${accountBadge}</td>
+        <td style="padding:12px 12px;text-align:right;white-space:nowrap;">
+          ${resetBtn}<button class="btn btn-danger btn-sm" onclick="confirmDeleteEmployee('${safeName}')">${t('emp_mgmt_delete')}</button>
         </td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
+
+  // 离职员工区块（在底部显示）
+  const resignedNames = Object.keys(appState.resignedEmployees).filter(n => !appState.permanentlyDeleted[n]).sort();
+  if (resignedNames.length > 0) {
+    list.innerHTML += `
+      <div style="margin-top:24px;border-top:2px dashed var(--border);padding-top:16px;">
+        <div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:8px;letter-spacing:0.03em;">${t('emp_mgmt_resigned_section')}（${resignedNames.length} ${getLang() === 'en' ? 'person(s)' : '人'}）</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--border);">
+            <th style="text-align:left;padding:6px 12px;font-weight:600;">${t('emp_mgmt_col_name')}</th>
+            <th style="text-align:left;padding:6px 12px;font-weight:600;">${t('emp_mgmt_col_account')}</th>
+            <th style="text-align:right;padding:6px 12px;font-weight:600;">${t('emp_mgmt_col_action')}</th>
+          </tr></thead>
+          <tbody>${resignedNames.map(name => {
+            const hasAccount = !!appState.employeeAccounts[name];
+            const accountBadge = hasAccount
+              ? `<span style="color:#1a7a4a;font-size:12px;">${t('emp_mgmt_has_account')}</span>`
+              : `<span style="color:#aaa;font-size:12px;">${t('emp_mgmt_no_account')}</span>`;
+            const safeName = name.replace(/'/g,"\\'");
+            return `<tr style="border-bottom:1px solid #eef0f4;opacity:0.7;">
+              <td style="padding:10px 12px;font-size:14px;color:var(--text-muted);">${name} <span style="font-size:11px;color:#aaa;">${t('emp_mgmt_resigned_label')}</span></td>
+              <td style="padding:10px 12px;">${accountBadge}</td>
+              <td style="padding:10px 12px;text-align:right;white-space:nowrap;">
+                <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="restoreEmployee('${safeName}')">${t('emp_mgmt_restore')}</button>
+                <button class="btn btn-danger btn-sm" style="font-size:11px;" onclick="permanentlyDeleteEmployee('${safeName}')">${t('emp_mgmt_perm_delete')}</button>
+              </td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+  }
+}
+
+// 默认密码 hash（123456）
+const DEFAULT_EMP_PASSWORD = '123456';
+let _defaultEmpPwHash = null; // 懒计算
+async function getDefaultEmpPwHash() {
+  if (!_defaultEmpPwHash) _defaultEmpPwHash = await sha256(DEFAULT_EMP_PASSWORD);
+  return _defaultEmpPwHash;
+}
+
+// 新建员工（从输入框）
+async function createNewEmployee() {
+  const inp = document.getElementById('new-emp-name-input');
+  const name = inp.value.trim();
+  if (!name) { inp.focus(); return; }
+  if (appState.employeeAccounts[name] || appState.allEmployees[name]) {
+    alert(t('emp_already_exists', { name }));
+    return;
+  }
+  const hash = await getDefaultEmpPwHash();
+  appState.employeeAccounts[name] = { passwordHash: hash };
+  appState.allEmployees[name] = true;
+  inp.value = '';
+  persistData(); // persistData 内部会同步 localStorage 并调用后端保存
+  // 同时通知后端单独创建账号（saveAdminState 已包含 employeeAccounts，这里只是冗余保障）
+  Backend.createEmpAccount(name).catch(e => console.warn('后端创建账号失败:', e));
+  renderEmpMgmt();
+  showMsg(t('emp_created', { name }));
+}
+
+// 为已有员工创建登录账号（原来只靠提交存在的员工）
+async function createAccountForEmp(name) {
+  const hash = await getDefaultEmpPwHash();
+  appState.employeeAccounts[name] = { passwordHash: hash };
+  persistData();
+  Backend.createEmpAccount(name).catch(e => console.warn('后端创建账号失败:', e));
+  renderEmpMgmt();
+  showMsg(t('emp_account_created', { name }));
+}
+
+// 重置员工密码为默认密码
+async function resetEmpPassword(name) {
+  if (!confirm(getLang() === 'en' ? `Reset password for "${name}" to the default (123456)?` : `确认将"${name}"的密码重置为默认密码（123456）吗？`)) return;
+  const hash = await getDefaultEmpPwHash();
+  if (!appState.employeeAccounts[name]) appState.employeeAccounts[name] = {};
+  appState.employeeAccounts[name].passwordHash = hash;
+  persistData();
+  Backend.resetEmpPassword(name).catch(e => console.warn('后端重置密码失败:', e));
+  showMsg(t('emp_pw_reset', { name }));
 }
 
 let _delEmpTarget = '';
 
 function confirmDeleteEmployee(name) {
   _delEmpTarget = name;
-  document.getElementById('del-emp-name').textContent = `员工：${name}`;
+  document.getElementById('del-emp-name').textContent = getLang()==='en' ? `Staff: ${name}` : `员工：${name}`;
   document.getElementById('del-emp-modal').classList.add('open');
 }
 
@@ -1047,48 +1823,102 @@ function deleteEmployeeResigned(name) {
   appState.resignedEmployees[name] = true;
   delete appState.allEmployees[name];
   delete appState.locationMap[name];
+  delete appState.employeeAccounts[name];
+  Backend.deleteEmpAccount(name).catch(e => console.warn('后端删除账号失败:', e));
   persistData();
   renderLocationTab();
   renderScheduleGrid();
   renderEmpMgmt();
 }
 
-// 全部删除：清除所有数据（含后端提交记录）
-async function deleteEmployeeAll(name) {
-  closeDelEmpModal();
-  // 清除所有排班数据（不管是否确认）
-  for (const data of Object.values(appState.schedules)) {
+// 收集某员工在所有月份/地点的排班记录摘要，返回描述字符串数组
+function getEmployeeScheduleSummary(name) {
+  const items = [];
+  for (const [schedKey, data] of Object.entries(scheduleCache)) {
+    // schedKey 格式："{loc}||{year}||{month}"
+    const hasAny = Object.values(data.days).some(arr => arr.includes(name));
+    if (!hasAny) continue;
+    const parts = schedKey.split('||');
+    if (parts.length < 3) continue;
+    const loc = parts.slice(0, parts.length - 2).join('||');
+    const year = parts[parts.length - 2];
+    const month = parts[parts.length - 1];
+    items.push(getLang()==='en' ? `${loc} (${t('cal_months')[parseInt(month)-1]} ${year})` : `${year}年${month}月「${loc}」`);
+  }
+  return items;
+}
+
+// 执行删除员工（已确认，含排班清除）
+async function _doDeleteEmployee(name, isPermanent) {
+  for (const data of Object.values(scheduleCache)) {
     for (const slotKey of Object.keys(data.days)) {
       data.days[slotKey] = data.days[slotKey].filter(n => n !== name);
     }
   }
-  // 清除本地缓存的提交记录
   for (const key of Object.keys(appState.submissions)) {
     appState.submissions[key] = appState.submissions[key].filter(s => s.name !== name);
   }
-  // 清除地点标记、员工记录
   delete appState.locationMap[name];
   delete appState.allEmployees[name];
   delete appState.resignedEmployees[name];
-  delete appState.permanentlyDeleted[name]; // 不需要了，直接从后端删除
+  delete appState.permanentlyDeleted[name];
+  delete appState.employeeAccounts[name];
+  Backend.deleteEmpAccount(name).catch(e => console.warn('后端删除账号失败:', e));
   persistData();
   renderLocationTab();
   renderScheduleGrid();
   renderEmpMgmt();
-  // 同步删除后端（Google Sheets / 本地服务器）中该员工的所有提交记录
-  try {
-    await Backend.deleteEmployeeSubmissions(name);
-  } catch(e) {
+  try { await Backend.deleteEmployeeSubmissions(name); } catch(e) {
     console.warn('后端提交记录删除失败（不影响本地操作）:', e);
   }
+  showMsg(isPermanent ? t('emp_perm_deleted', { name }) : t('emp_deleted', { name }));
+}
+
+// 全部删除：清除所有数据（含后端提交记录）
+async function deleteEmployeeAll(name) {
+  closeDelEmpModal();
+  const summary = getEmployeeScheduleSummary(name);
+  if (summary.length > 0) {
+    const msg = t('emp_delete_has_schedule', { name, list: summary.join('\n') });
+    if (!confirm(msg)) return;
+  }
+  await _doDeleteEmployee(name, false);
+}
+
+// 恢复离职员工为在职状态
+function restoreEmployee(name) {
+  if (!confirm(t('emp_restore_confirm', { name }))) return;
+  delete appState.resignedEmployees[name];
+  appState.allEmployees[name] = true;
+  persistData();
+  renderLocationTab();
+  renderEmpMgmt();
+  showMsg(t('emp_restored', { name }));
+}
+
+// 永久删除（含所有后端数据）
+async function permanentlyDeleteEmployee(name) {
+  const summary = getEmployeeScheduleSummary(name);
+  let confirmMsg = t('emp_perm_delete_confirm', { name });
+  if (summary.length > 0) {
+    confirmMsg = t('emp_perm_delete_has_schedule', { name, list: summary.join('\n') });
+  }
+  if (!confirm(confirmMsg)) return;
+  await _doDeleteEmployee(name, true);
+}
+
+// 今天的 dateKey（YYYY-MM-DD）
+function getTodayKey() {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
 }
 
 // ── SCHEDULING ──
 function getSchedKey(loc,year,month) { return `${loc}||${year}||${month}`; }
 function getSchedData(loc,year,month) {
   const key = getSchedKey(loc,year,month);
-  if (!appState.schedules[key]) appState.schedules[key] = {loc,year,month,days:{}};
-  return appState.schedules[key];
+  if (!scheduleCache[key]) scheduleCache[key] = { loc, year, month, days: {}, timeOverrides: {}, _fetched: false };
+  return scheduleCache[key];
 }
 
 // Count how many people are assigned for a given date+slotType across ALL locations
@@ -1104,7 +1934,7 @@ function isPersonElsewhere(name, loc, year, month, dateKey) {
   return getPersonElsewhereLoc(name, loc, year, month, dateKey) !== null;
 }
 function getPersonElsewhereLoc(name, loc, year, month, dateKey) {
-  for (const [key, data] of Object.entries(appState.schedules)) {
+  for (const [key, data] of Object.entries(scheduleCache)) {
     if (data.year !== year || data.month !== month || data.loc === loc) continue;
     // 只检查 start slot，有 start 才算真正排班
     const startKey = `${dateKey}||start`;
@@ -1119,26 +1949,27 @@ function getPersonElsewhereLoc(name, loc, year, month, dateKey) {
 let _cellClickTimer = null;
 let _cellClickCount = 0;
 
-function onCellClick(loc, year, month, dateKey, name, weekIdx) {
+function onCellClick(loc, year, month, dateKey, name, weekIdx, slot) {
+  if (_batchTimeMode) return; // batch time edit mode takes over
   _cellClickCount++;
   clearTimeout(_cellClickTimer);
   if (_cellClickCount === 1) {
     _cellClickTimer = setTimeout(() => {
       _cellClickCount = 0;
-      // 单击：切换排班
+      // 单击：切换排班（start/end 联动，slot 仅用于双击）
       toggleAssignment(loc, year, month, dateKey, name, weekIdx);
     }, 260);
   } else {
-    // 双击：打开修改时间 modal
+    // 双击：打开修改时间 modal，只改点击的那一格（start 或 end）
     _cellClickCount = 0;
-    openEditTimeModal(loc, year, month, dateKey, name);
+    openEditTimeModal(loc, year, month, dateKey, name, slot);
   }
 }
 
 // 点击任意格（start 或 end）时，联动操作 start+end 两个 slot
 function toggleAssignment(loc, year, month, dateKey, name, weekIdx) {
   if (isWeekConfirmed(loc, year, month, weekIdx)) {
-    alert('本周排班已确认，如需修改请在「设置」中取消确认。');
+    alert(t('sched_week_confirmed_lock'));
     return;
   }
   const schedData = getSchedData(loc, year, month);
@@ -1157,9 +1988,9 @@ function toggleAssignment(loc, year, month, dateKey, name, weekIdx) {
     if (ei >= 0) endArr.splice(ei, 1);
   } else {
     const limit = getSlotLimit(loc);
-    if (startArr.length >= limit) { alert(`每天最多安排 ${limit} 人，请先取消一人再添加。`); return; }
+    if (startArr.length >= limit) { alert(getLang() === 'en' ? `Max ${limit} staff per day. Please remove someone first.` : `每天最多安排 ${limit} 人，请先取消一人再添加。`); return; }
     if (isPersonElsewhere(name, loc, year, month, dateKey)) {
-      alert(`${name} 当天已在其他地点排班，不能重复排。`); return;
+      alert(getLang() === 'en' ? `${name} is already scheduled at another location today.` : `${name} 当天已在其他地点排班，不能重复排。`); return;
     }
     // 排班：同时写入 start 和 end
     startArr.push(name);
@@ -1169,10 +2000,34 @@ function toggleAssignment(loc, year, month, dateKey, name, weekIdx) {
   renderScheduleGrid();
 }
 
+// ── 时间工具函数 ──
+// 将用户输入的时间文本标准化为 "HH:MM" 或 "00:00"（24:00 → "00:00" 内部存储）
+// 支持：8:00 → 08:00，24:00 → 00:00（内部存储），返回 '' 表示无效
+function normalizeTimeInput(raw) {
+  if (!raw) return '';
+  const s = raw.trim().replace('：', ':');
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return '';
+  let h = parseInt(m[1]), min = parseInt(m[2]);
+  if (min > 59) return '';
+  if (h === 24 && min === 0) return '00:00'; // 24:00 内部存 00:00
+  if (h > 23) return '';
+  return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+}
+// 分钟数（00:00 当作次日 24:00 = 1440 min，用于比较跨日）
+function timeToMinsAdm(t) {
+  if (!t) return -1;
+  const [h, m] = t.split(':').map(Number);
+  // 00:00 在排班语境中代表午夜/24:00
+  return h === 0 && m === 0 ? 1440 : h * 60 + m;
+}
+
 // ── 管理员修改排班时间 ──
 let _editTimeCtx = null; // { loc, year, month, dateKey, name, schedKey }
 
-function openEditTimeModal(loc, year, month, dateKey, name) {
+function openEditTimeModal(loc, year, month, dateKey, name, slot) {
+  if (_batchTimeMode) return; // batch time edit mode takes over
+  // slot: 'start' | 'end' — 点击哪格只改那格；不传则两格都显示（兼容旧调用）
   const schedData = getSchedData(loc, year, month);
   // 读取当前已覆盖的时间，或原始员工提交的时间
   const to = (schedData.timeOverrides || {})[`${dateKey}||${name}`] || {};
@@ -1182,12 +2037,31 @@ function openEditTimeModal(loc, year, month, dateKey, name) {
 
   const empOrigStart = empDay && empDay.start ? empDay.start : '';
   const empOrigEnd   = empDay && empDay.end   ? empDay.end   : '';
-  const empRangeStr  = empOrigStart && empOrigEnd ? `（员工填写：${fmtTime(empOrigStart)}–${fmtTime(empOrigEnd)}）` : '';
-  document.getElementById('edit-time-label').textContent = `${name} · ${dateKey} ${empRangeStr}`;
-  document.getElementById('edit-time-start').value = to.start || empOrigStart || '';
-  document.getElementById('edit-time-end').value   = to.end   || empOrigEnd   || '';
-  _editTimeCtx = { loc, year, month, dateKey, name };
+  const empRangeStr  = empOrigStart && empOrigEnd
+    ? (getLang() === 'en' ? ` (staff: ${fmtTime(empOrigStart)}–${fmtTime(empOrigEnd)})` : `（员工填写：${fmtTime(empOrigStart)}–${fmtTime(empOrigEnd)}）`)
+    : '';
+  const slotLabel = getLang() === 'en'
+    ? (slot === 'start' ? ' · Edit Start' : slot === 'end' ? ' · Edit End' : '')
+    : (slot === 'start' ? ' · 修改开始时间' : slot === 'end' ? ' · 修改结束时间' : '');
+  document.getElementById('edit-time-label').textContent = `${name} · ${dateKey}${slotLabel} ${empRangeStr}`;
+
+  // 控制显示哪个输入框
+  const showStart = !slot || slot === 'start';
+  const showEnd   = !slot || slot === 'end';
+  document.getElementById('edit-time-start-wrap').style.display = showStart ? '' : 'none';
+  document.getElementById('edit-time-end-wrap').style.display   = showEnd   ? '' : 'none';
+
+  // 预填值
+  document.getElementById('edit-time-start').value = fmtTime(to.start || empOrigStart || '') || (to.start || empOrigStart || '');
+  document.getElementById('edit-time-end').value   = fmtTime(to.end   || empOrigEnd   || '') || (to.end   || empOrigEnd   || '');
+  document.getElementById('edit-time-error').textContent = '';
+  _editTimeCtx = { loc, year, month, dateKey, name, slot };
   document.getElementById('edit-time-modal').classList.add('open');
+  // 自动聚焦对应输入框
+  setTimeout(() => {
+    const focusId = showStart ? 'edit-time-start' : 'edit-time-end';
+    document.getElementById(focusId).focus();
+  }, 80);
 }
 
 function closeEditTimeModal() {
@@ -1209,47 +2083,557 @@ function fmtTime(t) {
 
 function applyEditTime() {
   if (!_editTimeCtx) return;
-  const { loc, year, month, dateKey, name } = _editTimeCtx;
-  const start = document.getElementById('edit-time-start').value;
-  const end   = document.getElementById('edit-time-end').value;
-  if (!start || !end) { alert('请填写开始和结束时间'); return; }
+  const { loc, year, month, dateKey, name, slot } = _editTimeCtx;
+  const errEl = document.getElementById('edit-time-error');
+  errEl.textContent = '';
 
-  // 比较时间：00:00 按 24:00 处理（可能跨日）
-  const startMins = timeToMins(start);
-  let endMins = timeToMins(end);
-  if (endMins === 0) endMins = 24 * 60; // 00:00 → 1440
-  if (endMins <= startMins) { alert('结束时间必须晚于开始时间'); return; }
+  const editStart = !slot || slot === 'start';
+  const editEnd   = !slot || slot === 'end';
 
-  // 检查是否超出员工提交的时间范围
+  const rawStart = editStart ? document.getElementById('edit-time-start').value.trim() : null;
+  const rawEnd   = editEnd   ? document.getElementById('edit-time-end').value.trim()   : null;
+
+  if (editStart && !rawStart) { errEl.textContent = getLang()==='en' ? 'Please enter start time' : '请填写开始时间'; return; }
+  if (editEnd   && !rawEnd)   { errEl.textContent = getLang()==='en' ? 'Please enter end time' : '请填写结束时间'; return; }
+
+  // 标准化输入（支持 24:00）
+  const start = editStart ? normalizeTimeInput(rawStart) : null;
+  const end   = editEnd   ? normalizeTimeInput(rawEnd)   : null;
+  if (editStart && !start) { errEl.textContent = getLang()==='en' ? 'Invalid start time format (e.g. 08:00)' : '开始时间格式错误，请输入如 08:00'; return; }
+  if (editEnd   && !end)   { errEl.textContent = getLang()==='en' ? 'Invalid end time format (e.g. 19:00 or 24:00)' : '结束时间格式错误，请输入如 19:00 或 24:00'; return; }
+
+  // 读取已有的另一侧时间（用于范围校验和存储）
+  const schedData = getSchedData(loc, year, month);
+  const existingOv = (schedData.timeOverrides || {})[`${dateKey}||${name}`] || {};
   const monthSubs = getMonthSubs(year, month);
   const sub = monthSubs.find(s => s.name === name);
   const empDay = sub && sub.schedule ? sub.schedule.find(e => e.date === dateKey) : null;
+  const existingStart = existingOv.start || (empDay && empDay.start) || null;
+  const existingEnd   = existingOv.end   || (empDay && empDay.end)   || null;
+
+  const finalStart = start || existingStart;
+  const finalEnd   = end   || existingEnd;
+
+  // 如果两端都有值，才做大小校验
+  if (finalStart && finalEnd) {
+    const startMins = timeToMinsAdm(finalStart);
+    const endMins   = timeToMinsAdm(finalEnd);
+    if (endMins <= startMins) { errEl.textContent = getLang()==='en' ? 'End time must be after start time' : '结束时间必须晚于开始时间'; return; }
+  }
+
+  // 检查是否超出员工提交的时间范围
   if (empDay && empDay.start && empDay.end) {
-    const empStartMins = timeToMins(empDay.start);
-    let empEndMins = timeToMins(empDay.end);
-    if (empEndMins === 0) empEndMins = 24 * 60;
-    if (startMins < empStartMins || endMins > empEndMins) {
-      const confirmed = window.confirm(
-        `⚠️ 注意：修改后的时间（${fmtTime(start)}–${fmtTime(end)}）超出了员工提交的可工作时段（${fmtTime(empDay.start)}–${fmtTime(empDay.end)}）。\n\n请提前通知员工确认。是否继续保存？`
-      );
-      if (!confirmed) return;
+    const empStartMins = timeToMinsAdm(empDay.start);
+    const empEndMins   = timeToMinsAdm(empDay.end);
+    const exceeded = [];
+    if (getLang() === 'en') {
+      if (start && timeToMinsAdm(start) < empStartMins)
+        exceeded.push(`Start time ${fmtTime(start)} is earlier than staff's submitted ${fmtTime(empDay.start)}`);
+      if (end && timeToMinsAdm(end) > empEndMins)
+        exceeded.push(`End time ${fmtTime(end)} is later than staff's submitted ${fmtTime(empDay.end)}`);
+    } else {
+      if (start && timeToMinsAdm(start) < empStartMins)
+        exceeded.push(`开始时间 ${fmtTime(start)} 早于员工填写的 ${fmtTime(empDay.start)}`);
+      if (end && timeToMinsAdm(end) > empEndMins)
+        exceeded.push(`结束时间 ${fmtTime(end)} 晚于员工填写的 ${fmtTime(empDay.end)}`);
+    }
+    if (exceeded.length > 0) {
+      const msg = getLang() === 'en'
+        ? `⚠️ ${exceeded.join('; ')}.\n\nPlease confirm with the staff member. Continue saving?`
+        : `⚠️ ${exceeded.join('；')}。\n\n请提前通知员工确认。是否继续保存？`;
+      if (!window.confirm(msg)) return;
     }
   }
 
-  const schedData = getSchedData(loc, year, month);
+  _pushTimeUndo(loc, year, month); // 保存前快照，支持撤销
   if (!schedData.timeOverrides) schedData.timeOverrides = {};
-  schedData.timeOverrides[`${dateKey}||${name}`] = { start, end };
+  const toKey = `${dateKey}||${name}`;
+  const prev = schedData.timeOverrides[toKey] || {};
+  if (start) prev.start = start;
+  if (end)   prev.end   = end;
+  schedData.timeOverrides[toKey] = prev;
   persistData();
   closeEditTimeModal();
   renderScheduleGrid();
 }
 
-function clearWeek(loc, year, month, weekIdx, wkDays) {
-  if (isWeekConfirmed(loc, year, month, weekIdx)) {
-    alert('本周排班已确认，如需清空请在「设置」中取消确认。');
+// ── 时间编辑撤销栈（按 loc||year||month||weekIdx 隔离） ──
+let _timeUndoStack = []; // 每项: { loc, year, month, weekIdx, overrides }
+
+function _pushTimeUndo(loc, year, month) {
+  const schedData = getSchedData(loc, year, month);
+  const snapshot = JSON.parse(JSON.stringify(schedData.timeOverrides || {}));
+  const weekIdx = _btCtx ? _btCtx.weekIdx : -1;
+  _timeUndoStack.push({ loc, year, month, weekIdx, overrides: snapshot });
+  // 最多保留 999 步（不限上限）
+  _updateWeekUndoBtn(loc, year, month, weekIdx);
+}
+
+function _updateWeekUndoBtn(loc, year, month, weekIdx) {
+  // 更新该周的↩按钮
+  const btn = document.getElementById(`undo-week-btn-${weekIdx}`);
+  if (!btn) return;
+  const count = _timeUndoStack.filter(s => s.weekIdx === weekIdx).length;
+  if (count > 0) {
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = '';
+    btn.title = t('sched_undo_hint', {count});
+    btn.textContent = `↩ (${count})`;
+  } else {
+    btn.style.opacity = '0.35';
+    btn.style.pointerEvents = 'none';
+    btn.title = t('sched_undo_empty');
+    btn.textContent = '↩';
+  }
+}
+
+function undoTimeEdit(loc, year, month, weekIdx) {
+  // 找到该周最后一次快照
+  const idx = [..._timeUndoStack].map((s,i)=>({s,i})).filter(({s})=>s.weekIdx===weekIdx).pop();
+  if (!idx) return;
+  const { overrides } = idx.s;
+  _timeUndoStack.splice(idx.i, 1);
+  const schedData = getSchedData(loc, year, month);
+  schedData.timeOverrides = overrides;
+  persistData();
+  _updateWeekUndoBtn(loc, year, month, weekIdx);
+  renderScheduleGrid();
+}
+
+function _clearTimeUndoStack() {
+  _timeUndoStack = [];
+  // buttons will be recreated by renderScheduleGrid
+}
+
+// ── 批量修改排班时间 ──
+let _batchTimeMode = false;
+let _btSelectedNames = new Set();
+let _btSelectedCells = [];
+let _btDragActive = false;
+let _btDragStartCell = null;
+let _btModeAorB = null; // 'name' | 'cell'
+let _btCtx = null; // { loc, year, month, weekIdx, wkDateKeys }
+let _btAllTargets = []; // full target list for highlight (updated by daytype change & input)
+
+// 进入某周的编辑时间模式（或在已激活时：有选人→打开面板；无选人→退出）
+function enterWeekEditTimeMode(loc, year, month, weekIdx, wkDateKeys) {
+  // wkDateKeys 是 JS 数组（含 null 占位），直接使用
+  // 如果已在该周模式
+  if (_batchTimeMode && _btCtx && _btCtx.weekIdx === weekIdx) {
+    if (_btModeAorB === 'name' && _btSelectedNames.size > 0) {
+      // 有选中的员工名 → 打开面板
+      _openBatchEditTimePanel('name');
+    } else {
+      // 没有选中 → 退出编辑时间模式
+      _cancelBatchTimeMode();
+    }
     return;
   }
-  if (!confirm('确认清空本周所有排班？')) return;
+  // 如果在另一周模式先退出
+  if (_batchTimeMode) _cancelBatchTimeMode();
+
+  _batchTimeMode = true;
+  _btCtx = { loc, year, month, weekIdx, wkDateKeys: wkDateKeys };
+  _btSelectedNames = new Set();
+  _btSelectedCells = [];
+  _btModeAorB = null;
+  _btAllTargets = [];
+  document.getElementById('sched-grid-container').classList.add('batch-time-mode');
+  // 高亮当前周的行
+  _highlightWeekRows(weekIdx, true);
+  _attachBatchTimeCellListeners();
+  // 更新按钮状态
+  _refreshWeekTimeBtns();
+}
+
+function _refreshWeekTimeBtns() {
+  if (!_btCtx) return;
+  const btn = document.getElementById(`edit-time-week-btn-${_btCtx.weekIdx}`);
+  if (btn) {
+    btn.textContent = getLang() === 'en' ? '⏱️ Selecting…' : '⏱️ 选人中…';
+    btn.style.background = 'rgba(245,158,11,0.35)';
+    btn.style.borderColor = '#f59e0b';
+  }
+}
+
+function _highlightWeekRows(weekIdx, on) {
+  // 给本周所有 tbody tr 加/去 class
+  const tbody = document.getElementById(`sched-tbody-${weekIdx}`);
+  if (!tbody) return;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.classList.toggle('bt-week-active', on);
+  });
+}
+
+function _cancelBatchTimeMode() {
+  _batchTimeMode = false;
+  if (_btCtx) {
+    const btn = document.getElementById(`edit-time-week-btn-${_btCtx.weekIdx}`);
+    if (btn) { btn.textContent = `⏱️ ${t('sched_edit_time_label')}`; btn.style.background = ''; btn.style.borderColor = ''; }
+    _highlightWeekRows(_btCtx.weekIdx, false);
+  }
+  document.getElementById('sched-grid-container').classList.remove('batch-time-mode');
+  _btSelectedNames = new Set();
+  _btSelectedCells = [];
+  _btModeAorB = null;
+  _btCtx = null;
+  _btAllTargets = [];
+  _detachBatchTimeCellListeners();
+  _clearBtHighlight();
+}
+
+function _clearBtHighlight() {
+  document.querySelectorAll('.bt-selected,.bt-cell-selected,.bt-preview-start,.bt-preview-end').forEach(el => {
+    el.classList.remove('bt-selected','bt-cell-selected','bt-preview-start','bt-preview-end');
+  });
+}
+
+// ── 模式a：点员工名 ──
+function _onNameCellClick(event, name) {
+  if (!_batchTimeMode) return;
+  if (_btModeAorB === 'cell') return;
+  _btModeAorB = 'name';
+  const td = event.currentTarget;
+  if (_btSelectedNames.has(name)) {
+    _btSelectedNames.delete(name);
+    td.classList.remove('bt-selected');
+  } else {
+    _btSelectedNames.add(name);
+    td.classList.add('bt-selected');
+  }
+}
+
+// 工具栏「选好后确认」按钮（浮窗已开时则忽略）
+function confirmWeekEditTimeNames(loc, year, month, weekIdx, wkDateKeysJson) {
+  if (!_batchTimeMode || !_btCtx || _btCtx.weekIdx !== weekIdx) return;
+  if (_btModeAorB !== 'name' || _btSelectedNames.size === 0) {
+    alert(getLang() === 'en' ? 'Please click staff names in the schedule grid (multiple allowed), then click here.' : '请先点击排班表中员工的姓名（可多选），再点此确认。');
+    return;
+  }
+  _openBatchEditTimePanel('name');
+}
+
+// ── 模式b：垂直拖选格子 ──
+function _attachBatchTimeCellListeners() {
+  const container = document.getElementById('sched-grid-container');
+  container.addEventListener('mousedown', _btCellMousedown);
+  container.addEventListener('mouseover', _btCellMouseover);
+  document.addEventListener('mouseup', _btCellMouseup);
+}
+function _detachBatchTimeCellListeners() {
+  const container = document.getElementById('sched-grid-container');
+  if (!container) return;
+  container.removeEventListener('mousedown', _btCellMousedown);
+  container.removeEventListener('mouseover', _btCellMouseover);
+  document.removeEventListener('mouseup', _btCellMouseup);
+}
+
+function _isBatchableCell(td) {
+  if (!td || !td.classList.contains('dc')) return false;
+  if (td.classList.contains('empty') || td.classList.contains('past') || td.classList.contains('not-submitted')) return false;
+  if (!td.dataset.name || !td.dataset.datekey) return false;
+  // 只能选本周日期范围内的格子
+  if (_btCtx && _btCtx.wkDateKeys) {
+    if (!_btCtx.wkDateKeys.includes(td.dataset.datekey)) return false;
+  }
+  return true;
+}
+
+function _btCellMousedown(e) {
+  if (!_batchTimeMode || _btModeAorB === 'name') return;
+  const td = e.target.closest('td');
+  if (!_isBatchableCell(td)) return;
+  e.preventDefault();
+  _btModeAorB = 'cell';
+  _btDragActive = true;
+  _btDragStartCell = { name: td.dataset.name, dateKey: td.dataset.datekey, slot: td.dataset.slot };
+  _btSelectedCells = [{ name: td.dataset.name, dateKey: td.dataset.datekey, slot: td.dataset.slot }];
+  document.querySelectorAll('.bt-cell-selected').forEach(el => el.classList.remove('bt-cell-selected'));
+  td.classList.add('bt-cell-selected');
+}
+
+function _btCellMouseover(e) {
+  if (!_btDragActive || _btModeAorB !== 'cell') return;
+  const td = e.target.closest('td');
+  if (!_isBatchableCell(td)) return;
+  const curDateKey = td.dataset.datekey;
+  const startDateKey = _btDragStartCell.dateKey;
+  if (curDateKey !== startDateKey) return;
+  const startSlot = _btDragStartCell.slot;
+  if (td.dataset.slot !== startSlot) return;
+  const allCells = Array.from(document.querySelectorAll(`td.dc[data-datekey="${curDateKey}"][data-slot="${startSlot}"]`))
+    .filter(c => _isBatchableCell(c));
+  const startIdx = allCells.findIndex(c => c.dataset.name === _btDragStartCell.name);
+  const curIdx   = allCells.findIndex(c => c.dataset.name === td.dataset.name);
+  if (startIdx === -1 || curIdx === -1) return;
+  const lo = Math.min(startIdx, curIdx), hi = Math.max(startIdx, curIdx);
+  document.querySelectorAll('.bt-cell-selected').forEach(el => el.classList.remove('bt-cell-selected'));
+  _btSelectedCells = [];
+  allCells.slice(lo, hi + 1).forEach(c => {
+    c.classList.add('bt-cell-selected');
+    if (!_btSelectedCells.find(x => x.name === c.dataset.name && x.dateKey === c.dataset.datekey && x.slot === c.dataset.slot))
+      _btSelectedCells.push({ name: c.dataset.name, dateKey: c.dataset.datekey, slot: c.dataset.slot });
+  });
+}
+
+function _btCellMouseup(e) {
+  if (!_btDragActive) return;
+  _btDragActive = false;
+  if (_btModeAorB === 'cell' && _btSelectedCells.length > 0) {
+    _openBatchEditTimePanel('cell');
+  }
+}
+
+// ── 浮窗开/关 ──
+function _openBatchEditTimePanel(modeSource) {
+  if (!_btCtx) return;
+  const { loc, year, month, weekIdx, wkDateKeys } = _btCtx;
+  const validDateKeys = wkDateKeys.filter(Boolean);
+
+  // 先构建候选 target 列表
+  let rawTargets = []; // { name, dateKey, origSlot (full|half), slot (start|end|both) }
+
+  if (modeSource === 'name') {
+    _btSelectedNames.forEach(name => {
+      const sub = getSubForLoc(name, loc, year, month);
+      if (!sub || !sub.schedule) return;
+      sub.schedule.forEach(entry => {
+        if (entry.slot === 'off') return;
+        if (!validDateKeys.includes(entry.date)) return; // 本周范围
+        const isFullDay = entry.slot === 'full';
+        rawTargets.push({ name, dateKey: entry.date, origSlot: isFullDay ? 'full' : 'half', slot: 'both' });
+      });
+    });
+    if (rawTargets.length === 0) { alert('所选员工在本周均无可工作日，无法修改时间。'); return; }
+  } else {
+    _btSelectedCells.forEach(({ name, dateKey, slot }) => {
+      const sub = getSubForLoc(name, loc, year, month);
+      if (!sub || !sub.schedule) return;
+      const entry = sub.schedule.find(e => e.date === dateKey);
+      if (!entry || entry.slot === 'off') return;
+      const isFullDay = entry.slot === 'full';
+      const existing = rawTargets.find(t => t.name === name && t.dateKey === dateKey);
+      if (!existing) rawTargets.push({ name, dateKey, origSlot: isFullDay ? 'full' : 'half', slot });
+      else if (existing.slot !== slot) existing.slot = 'both';
+    });
+    if (rawTargets.length === 0) { alert('所选格子均无员工提交数据，无法修改时间。'); return; }
+  }
+
+  document._btRawTargets = rawTargets;
+  document._btModeSource = modeSource;
+
+  // 构建标签文字
+  const names = [...new Set(rawTargets.map(t => t.name))].join('、');
+  const hasFull = rawTargets.some(t => t.origSlot === 'full');
+  const hasHalf = rawTargets.some(t => t.origSlot === 'half');
+
+  const labelEl = document.getElementById('batch-edit-time-label');
+  labelEl.textContent = modeSource === 'name'
+    ? `已选员工：${names}\n请选择修改哪种时段：`
+    : `已选 ${rawTargets.length} 个格子（${names}）`;
+
+  // 全天/半天选项：只有名字模式才显示（拖选时格子已明确）
+  const daytypeRow = document.getElementById('batch-edit-daytype-row');
+  if (modeSource === 'name' && (hasFull || hasHalf)) {
+    daytypeRow.style.display = '';
+    document.getElementById('batch-daytype-full').disabled = !hasFull;
+    document.getElementById('batch-daytype-half').disabled = !hasHalf;
+    // 默认选可用的那个
+    if (hasFull) document.getElementById('batch-daytype-full').checked = true;
+    else document.getElementById('batch-daytype-half').checked = true;
+  } else {
+    daytypeRow.style.display = 'none';
+  }
+
+  // 清空输入
+  document.getElementById('batch-edit-time-start').value = '';
+  document.getElementById('batch-edit-time-end').value = '';
+  document.getElementById('batch-edit-time-error').textContent = '';
+  document.getElementById('batch-edit-time-start-wrap').style.display = '';
+  document.getElementById('batch-edit-time-end-wrap').style.display = '';
+
+  // 如果是拖选模式，根据 slot 决定显示哪个输入框
+  if (modeSource === 'cell') {
+    const allSlots = [...new Set(rawTargets.map(t => t.slot))];
+    const showS = allSlots.some(s => s === 'start' || s === 'both');
+    const showE = allSlots.some(s => s === 'end'   || s === 'both');
+    document.getElementById('batch-edit-time-start-wrap').style.display = showS ? '' : 'none';
+    document.getElementById('batch-edit-time-end-wrap').style.display   = showE ? '' : 'none';
+  }
+
+  // 显示浮窗
+  const panel = document.getElementById('batch-edit-time-panel');
+  panel.style.display = '';
+
+  // 初始高亮
+  _updateBtPreviewHighlight();
+
+  setTimeout(() => document.getElementById('batch-edit-time-start').focus(), 80);
+}
+
+// daytype 单选改变时更新高亮
+function onBatchDaytypeChange() {
+  _updateBtPreviewHighlight();
+}
+
+// 输入框内容变化时更新高亮
+function onBatchTimeInput() {
+  _updateBtPreviewHighlight();
+}
+
+// 根据当前 daytype + 输入内容，计算实际将被修改的格子并高亮
+function _updateBtPreviewHighlight() {
+  // 清除旧高亮
+  document.querySelectorAll('.bt-preview-start,.bt-preview-end').forEach(el => {
+    el.classList.remove('bt-preview-start','bt-preview-end');
+  });
+
+  const rawTargets = document._btRawTargets;
+  if (!rawTargets) return;
+  const modeSource = document._btModeSource;
+
+  // 确定 daytype 过滤
+  let daytypeFilter = null; // null = 不过滤（cell模式）
+  if (modeSource === 'name') {
+    const fullRadio = document.getElementById('batch-daytype-full');
+    const halfRadio = document.getElementById('batch-daytype-half');
+    if (fullRadio && fullRadio.checked) daytypeFilter = 'full';
+    else if (halfRadio && halfRadio.checked) daytypeFilter = 'half';
+  }
+
+  // 确定哪些 slot 要高亮（根据输入框是否有值）
+  const rawStart = document.getElementById('batch-edit-time-start').value.trim();
+  const rawEnd   = document.getElementById('batch-edit-time-end').value.trim();
+  const highlightStart = rawStart.length > 0;
+  const highlightEnd   = rawEnd.length > 0;
+
+  // 过滤 target
+  const activeTargets = rawTargets.filter(t => {
+    if (daytypeFilter && t.origSlot !== daytypeFilter) return false;
+    return true;
+  });
+
+  // 高亮
+  activeTargets.forEach(({ name, dateKey, slot }) => {
+    const editS = (slot === 'start' || slot === 'both') && highlightStart;
+    const editE = (slot === 'end'   || slot === 'both') && highlightEnd;
+    if (editS) {
+      const cell = document.querySelector(`td.dc[data-name="${name}"][data-datekey="${dateKey}"][data-slot="start"]`);
+      if (cell) cell.classList.add('bt-preview-start');
+    }
+    if (editE) {
+      const cell = document.querySelector(`td.dc[data-name="${name}"][data-datekey="${dateKey}"][data-slot="end"]`);
+      if (cell) cell.classList.add('bt-preview-end');
+    }
+  });
+
+  // 存当前过滤后的 targets 供 apply 使用
+  document._btTargets = activeTargets;
+  // 存 slot 显示信息
+  if (modeSource === 'cell') {
+    const allSlots = [...new Set(activeTargets.map(t => t.slot))];
+    document._btShowStart = allSlots.some(s => s === 'start' || s === 'both');
+    document._btShowEnd   = allSlots.some(s => s === 'end'   || s === 'both');
+  } else {
+    document._btShowStart = true;
+    document._btShowEnd   = true;
+  }
+}
+
+function closeBatchEditTimeModal() {
+  const panel = document.getElementById('batch-edit-time-panel');
+  if (panel) panel.style.display = 'none';
+  document._btTargets = null;
+  document._btRawTargets = null;
+  _cancelBatchTimeMode();
+}
+
+function applyBatchEditTime() {
+  const errEl = document.getElementById('batch-edit-time-error');
+  errEl.textContent = '';
+
+  const rawStart = document.getElementById('batch-edit-time-start').value.trim();
+  const rawEnd   = document.getElementById('batch-edit-time-end').value.trim();
+  if (!rawStart && !rawEnd) { errEl.textContent = '请至少填写一个时间（留空则该字段保持原值）'; return; }
+
+  const start = rawStart ? normalizeTimeInput(rawStart) : null;
+  const end   = rawEnd   ? normalizeTimeInput(rawEnd)   : null;
+  if (rawStart && !start) { errEl.textContent = getLang()==='en' ? 'Invalid start time format (e.g. 08:00)' : '开始时间格式错误，请输入如 08:00'; return; }
+  if (rawEnd   && !end)   { errEl.textContent = getLang()==='en' ? 'Invalid end time format (e.g. 19:00 or 24:00)' : '结束时间格式错误，请输入如 19:00 或 24:00'; return; }
+
+  // 重新触发一次过滤（确保 _btTargets 与当前 daytype/输入一致）
+  _updateBtPreviewHighlight();
+  const targets = document._btTargets;
+  if (!targets || targets.length === 0) { errEl.textContent = '当前条件下没有可修改的格子'; return; }
+
+  const { loc, year, month, weekIdx } = _btCtx;
+  const monthSubs = getMonthSubs(year, month);
+  const schedData = getSchedData(loc, year, month);
+  if (!schedData.timeOverrides) schedData.timeOverrides = {};
+
+  // 超范围警告
+  const warnings = [];
+  targets.forEach(({ name, dateKey, slot }) => {
+    const sub = monthSubs.find(s => s.name === name);
+    const empDay = sub && sub.schedule ? sub.schedule.find(e => e.date === dateKey) : null;
+    if (!empDay || !empDay.start || !empDay.end) return;
+    const empS = timeToMinsAdm(empDay.start), empE = timeToMinsAdm(empDay.end);
+    const editS = (slot === 'start' || slot === 'both') && start;
+    const editE = (slot === 'end'   || slot === 'both') && end;
+    const exc = [];
+    if (editS && timeToMinsAdm(start) < empS) exc.push(`开始 ${fmtTime(start)} 早于员工填写的 ${fmtTime(empDay.start)}`);
+    if (editE && timeToMinsAdm(end)   > empE) exc.push(`结束 ${fmtTime(end)} 晚于员工填写的 ${fmtTime(empDay.end)}`);
+    if (exc.length) warnings.push(`${name}（${dateKey.slice(-5)}）：${exc.join('；')}`);
+  });
+  if (warnings.length > 0) {
+    if (!confirm(`⚠️ 以下时间超出员工填写范围，请提前通知：\n\n${warnings.join('\n')}\n\n是否继续保存？`)) return;
+  }
+
+  _pushTimeUndo(loc, year, month);
+  targets.forEach(({ name, dateKey, slot }) => {
+    const toKey = `${dateKey}||${name}`;
+    const prev = schedData.timeOverrides[toKey] || {};
+    if ((slot === 'start' || slot === 'both') && start) prev.start = start;
+    if ((slot === 'end'   || slot === 'both') && end)   prev.end   = end;
+    schedData.timeOverrides[toKey] = prev;
+  });
+  persistData();
+  closeBatchEditTimeModal();
+  _cancelBatchTimeMode();
+  renderScheduleGrid();
+}
+
+// ── 浮窗拖拽 ──
+(function initBatchPanelDrag() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const panel     = document.getElementById('batch-edit-time-panel');
+    const titlebar  = document.getElementById('batch-panel-titlebar');
+    if (!panel || !titlebar) return;
+    let dragging = false, ox = 0, oy = 0;
+    titlebar.addEventListener('mousedown', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      dragging = true;
+      const rect = panel.getBoundingClientRect();
+      ox = e.clientX - rect.left;
+      oy = e.clientY - rect.top;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      panel.style.right = 'auto';
+      panel.style.left = (e.clientX - ox) + 'px';
+      panel.style.top  = (e.clientY - oy) + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+  });
+})();
+
+function clearWeek(loc, year, month, weekIdx, wkDays) {
+  if (isWeekConfirmed(loc, year, month, weekIdx)) {
+    alert(t('sched_week_confirmed_no_clear'));
+    return;
+  }
+  if (!confirm(getLang() === 'en' ? 'Clear all schedules for this week?' : '确认清空本周所有排班？')) return;
   const schedData = getSchedData(loc, year, month);
   wkDays.forEach(dateKey => {
     if (!dateKey) return;
@@ -1263,18 +2647,18 @@ function clearWeek(loc, year, month, weekIdx, wkDays) {
 
 function autoScheduleWeek(loc, year, month, weekIdx, wkDays) {
   if (isWeekConfirmed(loc, year, month, weekIdx)) {
-    alert('本周排班已确认，无法进行自动排班。');
+    alert(t('sched_week_confirmed_no_auto'));
     return;
   }
   const schedData = getSchedData(loc, year, month);
   const today = new Date(); today.setHours(0,0,0,0);
   const limit = getSlotLimit(loc);
   const eligible = getEligibleEmployees(loc, year, month);
-  const monthSubs = getMonthSubs(year, month);
 
   // 返回员工在该天的可用程度：'full'（全天）| 'half'（半天）| null（不可用）
+  // 按当前地点默认时间截取后判断
   function getAvailLevel(name, dateKey) {
-    const sub = monthSubs.find(s => s.name === name);
+    const sub = getSubForLoc(name, loc, year, month);
     if (!sub || !sub.schedule) return null;
     const entry = sub.schedule.find(e => e.date === dateKey);
     if (!entry || entry.slot === 'off') return null;
@@ -1322,10 +2706,9 @@ function getEligibleEmployees(loc, year, month) {
   const orderKey = loc;
   const overKey = `${loc}||${year}||${month}`;
   const ov = appState.empOverrides[overKey] || { added:[], removed:[] };
-  // base list from locationMap（标记了该地点的员工），但只包含本月已提交班表的员工
-  const monthSubNames = new Set(getMonthSubs(year, month).map(s => s.name));
+  // base list from locationMap（标记了该地点的员工），包括所有被标记的员工（含未提交班表的）
   let base = Object.entries(appState.locationMap)
-    .filter(([n,locs]) => locs.includes(loc) && monthSubNames.has(n))
+    .filter(([n,locs]) => locs.includes(loc))
     .map(([n]) => n);
   // 补充：把该月已有排班记录的人也加进来（即使员工已被删除或本月未提交，历史/确认班次仍需显示）
   const schedData = getSchedData(loc, year, month);
@@ -1347,17 +2730,63 @@ function getEligibleEmployees(loc, year, month) {
   return base;
 }
 
+// 刷新排班表：重新从服务器拉取最新员工提交数据 + 重新加载管理员状态 + 重绘
+async function refreshScheduleGrid() {
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.textContent = '刷新中…'; }
+  try {
+    // 重新拉取服务器最新 AdminState（员工增删/地点变更等）
+    await loadPersistedData();
+    // 重新拉取当前月份的员工提交数据
+    const year  = parseInt(document.getElementById('sched-year').value);
+    const month = parseInt(document.getElementById('sched-month').value);
+    const loc   = document.getElementById('sched-location').value;
+    await fetchAndCacheSubs(year, month, true);
+    // 强制重新拉取当前地点排班表
+    await fetchAndCacheSchedule(loc, year, month, true);
+    _prefetchAdjacentMonths(loc, year, month);
+    renderScheduleGrid();
+    renderEmpMgmt();
+    renderLocationTab();
+  } catch(e) {
+    console.warn('刷新失败:', e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '刷新'; }
+  }
+}
+
+let _schedGridCtxKey = null;
 function renderScheduleGrid() {
   const loc = document.getElementById('sched-location').value;
   const year = parseInt(document.getElementById('sched-year').value);
   const month = parseInt(document.getElementById('sched-month').value);
   updateMonthBadge(year, month);
+  // 切换地点或月份时清空撤销栈
+  const ctxKey = `${loc}||${year}||${month}`;
+  if (ctxKey !== _schedGridCtxKey) {
+    _schedGridCtxKey = ctxKey;
+    _clearTimeUndoStack();
+    // 退出编辑时间模式
+    if (_batchTimeMode) _cancelBatchTimeMode();
+  }
 
-  // 如果该月数据还未缓存，静默拉取后重新渲染
+  // 如果员工提交数据还未缓存，静默拉取后重新渲染
   if (!appState.submissions[`${year}||${month}`]) {
     fetchAndCacheSubs(year, month, true).then(() => renderScheduleGrid());
     return;
   }
+
+  // 如果排班表还未从服务器拉取，静默拉取后重新渲染
+  const schedCacheEntry = scheduleCache[getSchedKey(loc, year, month)];
+  if (!schedCacheEntry || !schedCacheEntry._fetched) {
+    fetchAndCacheSchedule(loc, year, month, false).then(() => {
+      _prefetchAdjacentMonths(loc, year, month);
+      renderScheduleGrid();
+    });
+    return;
+  }
+
+  _updateSaveIndicator();
 
   const schedData = getSchedData(loc, year, month);
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -1367,23 +2796,24 @@ function renderScheduleGrid() {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
-  const DAY_ZH = ['周一','周二','周三','周四','周五','周六','周日'];
+  const DAY_ZH = t('sched_days');
 
   // Eligible employees (order + overrides applied)
   const eligible = getEligibleEmployees(loc, year, month);
 
   const noticeEl = document.getElementById('sched-notice');
-  if (eligible.length === 0) {
+  // 判断该地点是否从未有人被标记（与月份无关）
+  const anyMarkedToLoc = Object.values(appState.locationMap).some(locs => locs.includes(loc));
+  if (!anyMarkedToLoc) {
     noticeEl.style.display = 'block';
-    noticeEl.textContent = `⚠️ 当前没有员工被标记到"${loc}"，请先在「地点标记」中为员工分配地点。`;
-  } else { noticeEl.style.display = 'none'; }
+    noticeEl.textContent = `⚠️ ${t('sched_no_loc_notice', {loc})}`;
+  } else {
+    noticeEl.style.display = 'none';
+  }
 
-  // Get submissions for this month
-  const monthSubs = getMonthSubs(year, month);
-
-  // Helper: get a person's availability for a date+slot
+  // Helper: get a person's availability for a date+slot（按当前地点默认时间截取后判断）
   function getAvail(name, dateKey, slotType) {
-    const sub = monthSubs.find(s => s.name===name);
+    const sub = getSubForLoc(name, loc, year, month);
     if (!sub || !sub.schedule) return null;
     const entry = sub.schedule.find(e => e.date===dateKey);
     if (!entry) return null;
@@ -1414,7 +2844,9 @@ function renderScheduleGrid() {
   weeks.forEach((wk, wi) => {
     const firstSlot = wk.find(s => s !== null);
     const lastSlot = [...wk].reverse().find(s => s !== null);
-    const wTitle = `第${wi+1}周　${month}/${firstSlot.d} – ${month}/${lastSlot.d}`;
+    const wTitle = getLang() === 'en'
+      ? `Week ${wi+1}  ${month}/${firstSlot.d} – ${month}/${lastSlot.d}`
+      : `第${wi+1}周　${month}/${firstSlot.d} – ${month}/${lastSlot.d}`;
     const confirmed = isWeekConfirmed(loc, year, month, wi);
 
     // Collect dateKeys for this week (for clear/auto buttons)
@@ -1426,28 +2858,35 @@ function renderScheduleGrid() {
     const blockStyle = confirmed ? 'border-color:#b8960a;' : '';
     outerHtml += `<div class="week-block" style="${blockStyle}">`;
 
-    // Title bar with 3 action buttons on the right
+    // Title bar with action buttons on the right
     const titleBg = confirmed ? 'background:#a07800;' : '';
     const confirmBtnHtml = confirmed
-      ? `<button onclick="unconfirmWeek('${loc}',${year},${month},${wi})" style="background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;" title="在设置中取消确认">🔓 已确认</button>`
-      : `<button onclick="confirmWeek('${loc}',${year},${month},${wi})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;">✅ 确认排班</button>`;
+      ? `<button onclick="unconfirmWeek('${loc}',${year},${month},${wi})" style="background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;" title="${t('sched_confirmed_unlock_hint')}">🔓 ${t('sched_confirmed_label')}</button>`
+      : `<button onclick="confirmWeek('${loc}',${year},${month},${wi})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;">✅ ${t('sched_confirm_week_label')}</button>`;
     const clearBtnHtml = confirmed
-      ? `<button onclick="alert('本周已确认，如需清空请先点击「已确认」按钮取消确认。')" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.4);border-radius:5px;padding:3px 10px;font-size:11px;cursor:not-allowed;font-family:inherit;">🗑️ 清空班表</button>`
-      : `<button onclick="clearWeek('${loc}',${year},${month},${wi},${safeKeysAttr})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;">🗑️ 清空班表</button>`;
+      ? `<button onclick="alert('${t('sched_week_confirmed_no_clear')}')" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.4);border-radius:5px;padding:3px 10px;font-size:11px;cursor:not-allowed;font-family:inherit;">🗑️ ${t('sched_clear_week_label')}</button>`
+      : `<button onclick="clearWeek('${loc}',${year},${month},${wi},${safeKeysAttr})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;">🗑️ ${t('sched_clear_week_label')}</button>`;
     const autoBtnHtml = confirmed
-      ? `<button onclick="alert('本周已确认，无法进行自动排班。')" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.4);border-radius:5px;padding:3px 10px;font-size:11px;cursor:not-allowed;font-family:inherit;">⚡ 自动排班</button>`
-      : `<button onclick="autoScheduleWeek('${loc}',${year},${month},${wi},${safeKeysAttr})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;">⚡ 自动排班</button>`;
+      ? `<button onclick="alert('${t('sched_week_confirmed_no_auto')}')" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.4);border-radius:5px;padding:3px 10px;font-size:11px;cursor:not-allowed;font-family:inherit;">⚡ ${t('sched_auto_label')}</button>`
+      : `<button onclick="autoScheduleWeek('${loc}',${year},${month},${wi},${safeKeysAttr})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;">⚡ ${t('sched_auto_label')}</button>`;
+
+    // 编辑时间 & 撤销按钮（每周独立）
+    const safeLocAttr = loc.replace(/'/g, "\\'");
+    const undoCount = _timeUndoStack.filter(s => s.weekIdx === wi).length;
+    const undoDisabled = undoCount === 0;
+    const editTimeBtnHtml = `<button id="edit-time-week-btn-${wi}" onclick="enterWeekEditTimeMode('${safeLocAttr}',${year},${month},${wi},${safeKeysAttr})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;" title="${t('sched_edit_time_hint')}">⏱️ ${t('sched_edit_time_label')}</button>`;
+    const undoBtnHtml = `<button id="undo-week-btn-${wi}" onclick="undoTimeEdit('${safeLocAttr}',${year},${month},${wi})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;opacity:${undoDisabled?'0.35':'1'};${undoDisabled?'pointer-events:none;':''}" title="${undoDisabled ? t('sched_undo_empty') : t('sched_undo_hint',{count:undoCount})}">↩${undoCount>0?' ('+undoCount+')':''}</button>`;
 
     outerHtml += `<div class="week-block-title" style="display:flex;align-items:center;justify-content:space-between;${titleBg}">
       <span>${wTitle}${confirmed ? ' 🔒' : ''}</span>
-      <div style="display:flex;gap:6px;">${confirmBtnHtml}${clearBtnHtml}${autoBtnHtml}</div>
+      <div style="display:flex;gap:6px;">${confirmBtnHtml}${clearBtnHtml}${autoBtnHtml}${editTimeBtnHtml}${undoBtnHtml}</div>
     </div>`;
 
     outerHtml += `<div style="overflow-x:auto;"><table class="sched-tbl">`;
 
     outerHtml += `<thead>`;
     outerHtml += `<tr>`;
-    outerHtml += `<th class="h-name" rowspan="2">员工</th>`;
+    outerHtml += `<th class="h-name" rowspan="2">${t('sched_col_emp')}</th>`;
     wk.forEach((slot, wi2) => {
       if (slot === null) {
         outerHtml += `<th class="h-empty" colspan="2"></th>`;
@@ -1456,14 +2895,14 @@ function renderScheduleGrid() {
         outerHtml += `<th colspan="2" class="h-day"${todayStyle}>${DAY_ZH[wi2]}<br><span style="font-size:9px;font-weight:400;opacity:0.8;">${month}/${slot.d}</span></th>`;
       }
     });
-    outerHtml += `<th class="h-name" rowspan="2" style="width:50px;">周工时</th>`;
+    outerHtml += `<th class="h-name" rowspan="2" style="width:50px;">${t('sched_col_hours')}</th>`;
     outerHtml += `</tr>`;
     outerHtml += `<tr class="row-slots">`;
     wk.forEach((slot) => {
       if (slot === null) {
         outerHtml += `<th class="h-empty"></th><th class="h-empty"></th>`;
       } else {
-        outerHtml += `<th class="h-day-am">起始</th><th class="h-day-pm">结束</th>`;
+        outerHtml += `<th class="h-day-am">${t('sched_col_start')}</th><th class="h-day-pm">${t('sched_col_end')}</th>`;
       }
     });
     outerHtml += `</tr>`;
@@ -1471,7 +2910,7 @@ function renderScheduleGrid() {
 
     outerHtml += `<tbody id="sched-tbody-${wi}">`;
     if (eligible.length === 0) {
-      outerHtml += `<tr><td colspan="${1 + 14 + 1}" style="text-align:center;padding:20px;color:var(--text-muted);">请先标记员工地点</td></tr>`;
+      outerHtml += `<tr><td colspan="${1 + 14 + 1}" style="text-align:center;padding:20px;color:var(--text-muted);">${t('sched_mark_loc_first')}</td></tr>`;
     } else {
       eligible.forEach((name, ei) => {
         const isLast = ei === eligible.length - 1;
@@ -1482,9 +2921,9 @@ function renderScheduleGrid() {
           ondrop="onEmpDrop(event)"
           ondragleave="onEmpDragLeave(event)">`;
 
-        outerHtml += `<td class="td-name">
-          <span class="drag-handle" title="拖动排序">⠿</span>${name}
-          <button class="emp-remove-btn" title="从当月移除" onclick="removeTempEmployee('${loc}',${year},${month},'${safeN}')">✕</button>
+        outerHtml += `<td class="td-name" data-name="${name}" onclick="_onNameCellClick(event,'${safeN}')">
+          <span class="drag-handle" title="${getLang()==='en'?'Drag to reorder':'拖动排序'}">⠿</span>${name}
+          <button class="emp-remove-btn" title="${getLang()==='en'?'Remove from this month':'从当月移除'}" onclick="event.stopPropagation();removeTempEmployee('${loc}',${year},${month},'${safeN}')">✕</button>
         </td>`;
 
         let weekHours = 0;
@@ -1495,10 +2934,12 @@ function renderScheduleGrid() {
           } else {
             const { dateKey, isPast, isToday } = slot;
 
-            const empSub = monthSubs.find(s => s.name === name);
-            const empDay = empSub && empSub.schedule ? empSub.schedule.find(e => e.date === dateKey) : null;
+            // 按当前地点默认时间截取后的员工数据（不影响原始数据）
+            const empSubLoc = getSubForLoc(name, loc, year, month);
+            const hasSubmitted = !!empSubLoc; // 是否已提交班表
+            const empDay = empSubLoc && empSubLoc.schedule ? empSubLoc.schedule.find(e => e.date === dateKey) : null;
             const empAvail = empDay ? (empDay.slot !== 'off') : false;
-            // 管理员覆盖时间优先，否则用员工提交的时间
+            // 管理员覆盖时间优先，否则用按地点截取的员工时间
             const toKey = `${dateKey}||${name}`;
             const timeOv = (schedData.timeOverrides || {})[toKey] || {};
             const empStartRaw = timeOv.start || (empDay ? (empDay.start || '') : '');
@@ -1506,6 +2947,21 @@ function renderScheduleGrid() {
             // 00:00 显示为 24:00
             const empStart = fmtTime(empStartRaw) || empStartRaw;
             const empEnd   = fmtTime(empEndRaw)   || empEndRaw;
+
+            // 时间改动标注：判断管理员覆盖是否超出员工原始填写范围
+            const empOrigStart = empDay && empDay.start ? empDay.start : '';
+            const empOrigEnd   = empDay && empDay.end   ? empDay.end   : '';
+            let startTimeWarn = false, endTimeWarn = false;
+            if (timeOv.start && empOrigStart) {
+              startTimeWarn = timeToMinsAdm(timeOv.start) < timeToMinsAdm(empOrigStart);
+            }
+            if (timeOv.end && empOrigEnd) {
+              const ovEndMins = timeToMinsAdm(timeOv.end === '00:00' ? '24:00' : timeOv.end);
+              const origEndMins = timeToMinsAdm(empOrigEnd === '00:00' ? '24:00' : empOrigEnd);
+              endTimeWarn = ovEndMins > origEndMins;
+            }
+            const origTimeNote = (startTimeWarn || endTimeWarn) && empOrigStart && empOrigEnd
+              ? `（员工原填：${fmtTime(empOrigStart)}–${fmtTime(empOrigEnd)}）` : '';
 
             // start 和 end 联动：两格共享同一个排班状态
             {
@@ -1524,21 +2980,27 @@ function renderScheduleGrid() {
               let endCls = 'dc sep';
               let endInner = '', endHandler = '';
 
-              // 已排班：用 onCellClick（单击=取消，双击=改时间）
-              const cellClickJS = `onclick="onCellClick('${loc}',${year},${month},'${dateKey}','${safeN}',${wi})"`;
-              // 仅双击打开编辑（confirmed 或 past 状态，不允许取消）
-              const dblOnlyJS = `onclick="openEditTimeModal('${loc}',${year},${month},'${dateKey}','${safeN}')"`;
+              // 已排班：用 onCellClick（单击=取消，双击=改时间），start/end 格分别传 slot
+              const cellClickStartJS = `onclick="onCellClick('${loc}',${year},${month},'${dateKey}','${safeN}',${wi},'start')"`;
+              const cellClickEndJS   = `onclick="onCellClick('${loc}',${year},${month},'${dateKey}','${safeN}',${wi},'end')"`;
+              // 仅点击打开编辑（confirmed 或 past 状态，不允许取消）—— start/end 分别只改对应字段
+              const dblOnlyStartJS = `onclick="openEditTimeModal('${loc}',${year},${month},'${dateKey}','${safeN}','start')"`;
+              const dblOnlyEndJS   = `onclick="openEditTimeModal('${loc}',${year},${month},'${dateKey}','${safeN}','end')"`;
 
-              if (confirmed) {
+              if (!hasSubmitted && !isChecked) {
+                // 未提交班表：显示"未填写"状态（灰色虚线）
+                startCls += ' not-submitted'; startInner = '—';
+                endCls   += ' not-submitted'; endInner   = '—';
+              } else if (confirmed) {
                 if (isChecked) {
                   const colorCls = posIdx === 0 ? ' p1' : ' p2';
                   startCls += colorCls + ' confirmed-cell';
                   endCls   += colorCls + ' confirmed-cell';
                   startInner = empStart || '✓';
                   endInner   = empEnd   || '✓';
-                  // confirmed 状态：点击直接打开编辑（不切换）
-                  startHandler = dblOnlyJS;
-                  endHandler   = dblOnlyJS;
+                  // confirmed 状态：点击直接打开编辑（不切换），start/end 分别只改对应字段
+                  startHandler = dblOnlyStartJS;
+                  endHandler   = dblOnlyEndJS;
                 } else if (elsewhere) {
                   startCls += ' conflict'; startInner = '⊗';
                   endCls   += ' conflict'; endInner   = '⊗';
@@ -1550,48 +3012,70 @@ function renderScheduleGrid() {
                   endCls   += ' no-avail'; endInner   = '✕';
                 }
               } else if (isPast) {
-                startCls += ' past'; endCls += ' past';
+                // 过去的日期：与未来日期相同，可正常排班/取消/改时间
                 if (isChecked) {
                   const colorCls = posIdx === 0 ? ' p1' : ' p2';
                   startCls += colorCls; endCls += colorCls;
                   startInner = empStart || '✓'; endInner = empEnd || '✓';
-                  startHandler = dblOnlyJS;
-                  endHandler   = dblOnlyJS;
+                  // 过去已排班：单击可取消，双击改时间（与未来已排班相同）
+                  startHandler = cellClickStartJS;
+                  endHandler   = cellClickEndJS;
+                } else if (elsewhere) {
+                  startCls += ' conflict'; startInner = '⊗';
+                  endCls   += ' conflict'; endInner   = '⊗';
+                } else if (empAvail) {
+                  startCls += ' avail'; startInner = empStart || '○';
+                  endCls   += ' avail'; endInner   = empEnd   || '○';
+                  // 过去未排班但员工可用：允许补排班
+                  startHandler = cellClickStartJS;
+                  endHandler   = cellClickEndJS;
+                } else if (hasSubmitted) {
+                  startCls += ' no-avail'; startInner = '✕';
+                  endCls   += ' no-avail'; endInner   = '✕';
+                } else {
+                  startCls += ' not-submitted'; startInner = '—';
+                  endCls   += ' not-submitted'; endInner   = '—';
                 }
               } else if (isChecked) {
                 const colorCls = posIdx === 0 ? ' p1' : ' p2';
                 startCls += colorCls; endCls += colorCls;
                 startInner = empStart || '✓'; endInner = empEnd || '✓';
-                // 单击切换/双击改时间
-                startHandler = cellClickJS;
-                endHandler   = cellClickJS;
+                // 单击切换/双击改对应时间
+                startHandler = cellClickStartJS;
+                endHandler   = cellClickEndJS;
               } else if (elsewhere) {
                 startCls += ' conflict'; startInner = '⊗';
                 endCls   += ' conflict'; endInner   = '⊗';
               } else if (empAvail) {
                 startCls += ' avail'; startInner = empStart || '○';
                 endCls   += ' avail'; endInner   = empEnd   || '○';
-                startHandler = cellClickJS;
-                endHandler   = cellClickJS;
+                startHandler = cellClickStartJS;
+                endHandler   = cellClickEndJS;
               } else {
                 startCls += ' no-avail'; startInner = '✕';
                 endCls   += ' no-avail'; endInner   = '✕';
               }
               if (isToday && !isPast && !confirmed) { startCls += ' today'; endCls += ' today'; }
 
-              const titleStart = confirmed
-                ? `${name} ${dateKey} 起始（点击修改时间）`
+              const titleStart = !hasSubmitted && !isChecked ? `${name} 尚未提交班表`
+                : confirmed ? `${name} ${dateKey} 起始（点击修改时间）`
                 : elsewhere ? `${name} 当天已在「${elsewhereLoc}」排班`
                 : isChecked ? `${name} 起始 ${empStart||'未填'}（单击取消；双击改时间）`
                 : `${name} ${dateKey} 起始：${empStart||'未填'}`;
-              const titleEnd = confirmed
-                ? `${name} ${dateKey} 结束（点击修改时间）`
+              const titleEnd = !hasSubmitted && !isChecked ? `${name} 尚未提交班表`
+                : confirmed ? `${name} ${dateKey} 结束（点击修改时间）`
                 : elsewhere ? `${name} 当天已在「${elsewhereLoc}」排班`
                 : isChecked ? `${name} 结束 ${empEnd||'未填'}（单击取消；双击改时间）`
                 : `${name} ${dateKey} 结束：${empEnd||'未填'}`;
 
-              outerHtml += `<td class="${startCls}" ${startHandler} title="${titleStart}">${startInner}</td>`;
-              outerHtml += `<td class="${endCls}"   ${endHandler}   title="${titleEnd}">${endInner}</td>`;
+              // 时间改动标注
+              if (startTimeWarn) { startCls += ' time-override-warn'; }
+              if (endTimeWarn)   { endCls   += ' time-override-warn'; }
+              const titleStartFull = startTimeWarn ? titleStart + ' ' + origTimeNote : titleStart;
+              const titleEndFull   = endTimeWarn   ? titleEnd   + ' ' + origTimeNote : titleEnd;
+
+              outerHtml += `<td class="${startCls}" ${startHandler} title="${titleStartFull}" data-name="${name}" data-datekey="${dateKey}" data-slot="start">${startInner}</td>`;
+              outerHtml += `<td class="${endCls}"   ${endHandler}   title="${titleEndFull}"   data-name="${name}" data-datekey="${dateKey}" data-slot="end">${endInner}</td>`;
             }
 
             // 只有 start 里有这人才算真正排班（start+end 联动）
@@ -1627,10 +3111,9 @@ function autoSchedule() {
   const today = new Date(); today.setHours(0,0,0,0);
   const limit = getSlotLimit(loc);
   const eligible = getEligibleEmployees(loc, year, month);
-  const monthSubs = getMonthSubs(year, month);
 
   function getAvailSlot(name, dateKey) {
-    const sub = monthSubs.find(s => s.name===name);
+    const sub = getSubForLoc(name, loc, year, month);
     if (!sub || !sub.schedule) return null;
     const entry = sub.schedule.find(e => e.date===dateKey);
     if (!entry || entry.slot === 'off') return null;
@@ -1674,35 +3157,58 @@ function autoSchedule() {
 
 // ── SETTINGS ──
 function openSettingsModal() {
-  // Slot limits section
-  let limitHtml = LOCATIONS.map(l => {
-    const val = appState.slotLimits[l] !== undefined ? appState.slotLimits[l] : 2;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;">
-      <span style="font-size:13px;">${l}</span>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <label style="font-size:12px;color:var(--text-muted);">每时段最多：</label>
-        <input type="number" min="1" max="10" value="${val}" data-loc="${l}"
-          style="width:56px;border:1.5px solid var(--border);border-radius:6px;padding:4px 8px;font-size:13px;text-align:center;">
-        <span style="font-size:11px;color:var(--text-muted);">人</span>
-      </div>
-    </div>`;
-  }).join('');
+  // 当前排班地点
+  const curLoc = document.getElementById('sched-location').value;
+
+  // Slot limits section（只显示当前地点）
+  const limitVal = appState.slotLimits[curLoc] !== undefined ? appState.slotLimits[curLoc] : 2;
+  const limitHtml = `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;">
+    <span style="font-size:13px;">${curLoc}</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <label style="font-size:12px;color:var(--text-muted);">${getLang()==='en' ? 'Max per day:' : '每天最多：'}</label>
+      <input type="number" min="1" max="10" value="${limitVal}" data-loc="${curLoc}" data-type="limit"
+        style="width:56px;border:1.5px solid var(--border);border-radius:6px;padding:4px 8px;font-size:13px;text-align:center;">
+      <span style="font-size:11px;color:var(--text-muted);">${getLang()==='en' ? 'staff' : '人'}</span>
+    </div>
+  </div>`;
   document.getElementById('settings-limit-list').innerHTML = limitHtml;
+
+  // Location default times section（只显示当前地点）
+  const timeInputStyle = 'border:1.5px solid var(--border);border-radius:6px;padding:4px 6px;font-size:13px;font-family:inherit;width:90px;';
+  const ls = appState.locSettings[curLoc] || {};
+  const ds = fmtTime(ls.defaultStart || '') || ls.defaultStart || '';
+  const de = fmtTime(ls.defaultEnd   || '') || ls.defaultEnd   || '';
+  const locTimesHtml = `<div style="padding:8px 0;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px;">${curLoc}</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <label style="font-size:12px;color:var(--text-muted);">${getLang()==='en' ? 'Default Start' : '默认开始'}</label>
+      <input type="text" placeholder="${getLang()==='en' ? 'e.g. 10:00' : '如 10:00'}" value="${ds}" data-loc="${curLoc}" data-type="defStart"
+        style="${timeInputStyle}" maxlength="5">
+      <label style="font-size:12px;color:var(--text-muted);">${getLang()==='en' ? 'Default End' : '默认结束'}</label>
+      <input type="text" placeholder="${getLang()==='en' ? 'e.g. 19:00 or 24:00' : '如 19:00 或 24:00'}" value="${de}" data-loc="${curLoc}" data-type="defEnd"
+        style="${timeInputStyle}" maxlength="5">
+      <span style="font-size:11px;color:var(--text-muted);">${getLang()==='en' ? '(leave blank = no limit)' : '（留空 = 不限制）'}</span>
+    </div>
+  </div>`;
+  document.getElementById('settings-loc-times-list').innerHTML = locTimesHtml;
 
   // Confirmed weeks section
   const confirmedEntries = Object.keys(appState.confirmedWeeks).filter(k => appState.confirmedWeeks[k]);
   let confirmedHtml = '';
   if (confirmedEntries.length === 0) {
-    confirmedHtml = `<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">暂无已确认的班次。</div>`;
+    confirmedHtml = `<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">${getLang()==='en' ? 'No confirmed weeks.' : '暂无已确认的班次。'}</div>`;
   } else {
     confirmedHtml = confirmedEntries.map(k => {
       const parts = k.split('||');
       const [cloc, cyear, cmonth, cwi] = parts;
-      const label = `${cloc} · ${cyear}年${cmonth}月 第${parseInt(cwi)+1}周`;
+      const months = t('cal_months');
+      const label = getLang()==='en'
+        ? `${cloc} · ${months[parseInt(cmonth)-1]} ${cyear} Week ${parseInt(cwi)+1}`
+        : `${cloc} · ${cyear}年${cmonth}月 第${parseInt(cwi)+1}周`;
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee;">
         <span style="font-size:13px;">🔒 ${label}</span>
         <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 10px;"
-          onclick="unconfirmWeekFromSettings('${k}')">取消确认</button>
+          onclick="unconfirmWeekFromSettings('${k}')">${getLang()==='en' ? 'Un-confirm' : '取消确认'}</button>
       </div>`;
     }).join('');
   }
@@ -1719,10 +3225,22 @@ function unconfirmWeekFromSettings(key) {
 }
 
 function saveSettings() {
-  document.querySelectorAll('#settings-limit-list input[data-loc]').forEach(inp => {
+  // 保存当前地点的每天人数上限
+  document.querySelectorAll('#settings-limit-list input[data-type="limit"]').forEach(inp => {
     const l = inp.dataset.loc;
     const v = parseInt(inp.value) || 2;
     appState.slotLimits[l] = v;
+  });
+  // 保存当前地点的默认上下班时间
+  document.querySelectorAll('#settings-loc-times-list input[data-type="defStart"]').forEach(inp => {
+    const l = inp.dataset.loc;
+    if (!appState.locSettings[l]) appState.locSettings[l] = {};
+    appState.locSettings[l].defaultStart = normalizeTimeInput(inp.value.trim());
+  });
+  document.querySelectorAll('#settings-loc-times-list input[data-type="defEnd"]').forEach(inp => {
+    const l = inp.dataset.loc;
+    if (!appState.locSettings[l]) appState.locSettings[l] = {};
+    appState.locSettings[l].defaultEnd = normalizeTimeInput(inp.value.trim());
   });
   persistData();
   document.getElementById('settings-modal').classList.remove('open');
@@ -1848,7 +3366,7 @@ function addTempEmployee() {
   const month = parseInt(document.getElementById('sched-month').value);
   const name  = document.getElementById('add-emp-select').value;
   const errEl = document.getElementById('edit-emp-error');
-  if (!name) { errEl.textContent = '请先选择一位员工'; return; }
+  if (!name) { errEl.textContent = getLang()==='en' ? 'Please select a staff member first' : '请先选择一位员工'; return; }
   const overKey = `${loc}||${year}||${month}`;
   if (!appState.empOverrides[overKey]) appState.empOverrides[overKey] = { added:[], removed:[] };
   const ov = appState.empOverrides[overKey];
@@ -1894,7 +3412,7 @@ function exportScheduleExcel() {
   const month = parseInt(document.getElementById('sched-month').value);
   const schedData = getSchedData(loc, year, month);
   const daysInMonth = new Date(year, month, 0).getDate();
-  const DAY_ZH = ['周一','周二','周三','周四','周五','周六','周日'];
+  const DAY_ZH = t('sched_days');
   const firstDay = new Date(year, month-1, 1);
   const startWd = (firstDay.getDay()+6)%7;
 
@@ -1961,12 +3479,11 @@ function exportScheduleExcel() {
         const startA = schedData.days[`${slot.dateKey}||start`] || [];
         const isAssigned = startA.includes(name);
         if (!isAssigned) { row.push('', ''); return; }
-        // 读取时间（管理员覆盖 > 员工提交）
+        // 读取时间（管理员覆盖 > 按地点截取的员工提交时间）
         const toKey = `${slot.dateKey}||${name}`;
         const timeOv = (schedData.timeOverrides || {})[toKey] || {};
-        const monthSubsEx = getMonthSubs(year, month);
-        const sub = monthSubsEx.find(s => s.name === name);
-        const empDay = sub && sub.schedule ? sub.schedule.find(e => e.date === slot.dateKey) : null;
+        const subLoc = getSubForLoc(name, loc, year, month);
+        const empDay = subLoc && subLoc.schedule ? subLoc.schedule.find(e => e.date === slot.dateKey) : null;
         const tStart = timeOv.start || (empDay && empDay.start) || '';
         const tEnd   = timeOv.end   || (empDay && empDay.end)   || '';
         // 显示时 00:00 → 24:00
@@ -2004,8 +3521,8 @@ function exportSchedulePDF() {
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month-1, 1);
   const startWd = (firstDay.getDay()+6)%7;
-  const DAY_ZH = ['周一','周二','周三','周四','周五','周六','周日'];
-  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  const DAY_ZH = t('sched_days');
+  const monthNames = t('cal_months');
 
   const eligible = getEligibleEmployees(loc, year, month);
 
@@ -2031,12 +3548,12 @@ function exportSchedulePDF() {
   // Build one SVG per week, collect as array
   const svgBlocks = [];
 
-  const monthSubs = getMonthSubs(year, month);
-
   weeks.forEach((wkArr, wi) => {
     const firstSlot = wkArr.find(s=>s!==null);
     const lastSlot  = [...wkArr].reverse().find(s=>s!==null);
-    const wLabel    = `第${wi+1}周  ${month}/${firstSlot.d} – ${month}/${lastSlot.d}`;
+    const wLabel = getLang() === 'en'
+      ? `Week ${wi+1}  ${month}/${firstSlot.d} – ${month}/${lastSlot.d}`
+      : `第${wi+1}周  ${month}/${firstSlot.d} – ${month}/${lastSlot.d}`;
     const empCount  = eligible.length;
     const H = TITLE_H + HEAD_H + empCount * ROW_H + 2;
 
@@ -2049,7 +3566,7 @@ function exportSchedulePDF() {
     // Header row: day names + date
     const hY = TITLE_H;
     s += `<rect x="0" y="${hY}" width="${NAME_W}" height="${HEAD_H}" fill="#b0cce0"/>`;
-    s += `<text x="${NAME_W/2}" y="${hY+HEAD_H/2+4}" text-anchor="middle" fill="#1c4f80" font-size="10" font-weight="bold">员工</text>`;
+    s += `<text x="${NAME_W/2}" y="${hY+HEAD_H/2+4}" text-anchor="middle" fill="#1c4f80" font-size="10" font-weight="bold">${t('sched_col_emp')}</text>`;
 
     wkArr.forEach((slot, di) => {
       const x = NAME_W + di * CELL_W;
@@ -2062,7 +3579,7 @@ function exportSchedulePDF() {
       s += `<line x1="${x+CELL_W}" y1="${hY}" x2="${x+CELL_W}" y2="${H}" stroke="#9ab8d4" stroke-width="1"/>`;
     });
     s += `<rect x="${NAME_W+7*CELL_W}" y="${hY}" width="${HOURS_W}" height="${HEAD_H}" fill="#b0cce0"/>`;
-    s += `<text x="${NAME_W+7*CELL_W+HOURS_W/2}" y="${hY+HEAD_H/2+4}" text-anchor="middle" fill="#1c4f80" font-size="9" font-weight="bold">周工时</text>`;
+    s += `<text x="${NAME_W+7*CELL_W+HOURS_W/2}" y="${hY+HEAD_H/2+4}" text-anchor="middle" fill="#1c4f80" font-size="9" font-weight="bold">${t('sched_col_hours')}</text>`;
     s += `<line x1="0" y1="${hY+HEAD_H}" x2="${TABLE_W}" y2="${hY+HEAD_H}" stroke="#1c4f80" stroke-width="1.5"/>`;
     s += `<line x1="${NAME_W}" y1="${hY}" x2="${NAME_W}" y2="${H}" stroke="#1c4f80" stroke-width="1.5"/>`;
 
@@ -2083,11 +3600,11 @@ function exportSchedulePDF() {
         const isAssigned = startA.includes(name);
         if (!isAssigned) return;
 
-        // 读取时间
+        // 读取时间（管理员覆盖 > 按地点截取的员工提交时间）
         const toKey = `${slot.dateKey}||${name}`;
         const timeOv = (schedData.timeOverrides || {})[toKey] || {};
-        const sub = monthSubs.find(s => s.name === name);
-        const empDay = sub && sub.schedule ? sub.schedule.find(e => e.date === slot.dateKey) : null;
+        const subPdf = getSubForLoc(name, loc, year, month);
+        const empDay = subPdf && subPdf.schedule ? subPdf.schedule.find(e => e.date === slot.dateKey) : null;
         const tStart = timeOv.start || (empDay && empDay.start) || '';
         const tEnd   = timeOv.end   || (empDay && empDay.end)   || '';
 
@@ -2122,7 +3639,9 @@ function exportSchedulePDF() {
   // Open new window and render all week SVGs
   const win = window.open('', '_blank');
   if (!win) { alert('请允许弹出窗口'); return; }
-  const titleStr = `${loc}　${year}年${monthNames[month-1]} 排班表`;
+  const titleStr = getLang() === 'en'
+    ? `${loc} — ${monthNames[month-1]} ${year} Schedule`
+    : `${loc}　${year}年${monthNames[month-1]} 排班表`;
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${titleStr}</title>
     <style>
       body { margin: 20px; background: #fff; font-family: Arial, sans-serif; }
@@ -2132,7 +3651,7 @@ function exportSchedulePDF() {
     </style>
   </head><body>
     <h2>${titleStr}</h2>
-    <div class="hint">Ctrl+P / Cmd+P 打印并保存为PDF，建议横向打印</div>
+    <div class="hint">${t('sched_pdf_hint')}</div>
     ${svgBlocks.join('\n')}
   </body></html>`);
   win.document.close();
@@ -2140,12 +3659,20 @@ function exportSchedulePDF() {
 
 // ── HELPERS ──
 function updateMonthBadge(year,month) {
-  const names = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-  document.getElementById('month-badge').textContent = `${year}年 ${names[month-1]}`;
+  const names = t('cal_months');
+  const badge = getLang() === 'en' ? `${names[month-1]} ${year}` : `${year}年 ${names[month-1]}`;
+  document.getElementById('month-badge').textContent = badge;
 }
 function showLoading(show) {
   document.getElementById('loading').className = show?'loading-overlay open':'loading-overlay';
 }
+
+// ── Page load: init language UI ──
+(function() {
+  initLangSwitchers();
+  populateMonthSelects();
+  applyI18n();
+})();
 </script>
 </body>
 </html>
