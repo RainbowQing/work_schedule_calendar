@@ -122,10 +122,11 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 .sub-table .name-cell { font-weight: 600; }
 .avail-dots { display: flex; gap: 2px; flex-wrap: wrap; max-width: 240px; }
 .avail-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-.dot-full { background: #2e7abf; }
-.dot-am { background: #5aaee0; opacity: 0.7; }
-.dot-pm { background: #3a8fd4; opacity: 0.7; }
-.dot-off { background: #d0dce8; }
+.dot-full { background: #1c4f80; }
+.dot-am { background: #93c5fd; }
+.dot-pm { background: #93c5fd; }
+.dot-half { background: #93c5fd; }
+.dot-off { background: #e2e8f0; }
 .new-badge { background: #fef3c7; color: #92400e; border-radius: 10px; padding: 1px 7px; font-size: 10px; font-weight: 700; margin-left: 6px; }
 
 /* ── LOCATION TAB ── */
@@ -304,10 +305,10 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
       <span class="topnav-badge" id="month-badge">—</span>
     </div>
     <div class="topnav-tabs">
-      <button class="topnav-tab" data-i18n="tab_employees" onclick="showTab('employees')">员工管理</button>
-      <button class="topnav-tab active" data-i18n="tab_submissions" onclick="showTab('submissions')">员工提交</button>
-      <button class="topnav-tab" data-i18n="tab_locations" onclick="showTab('locations')">地点标记</button>
-      <button class="topnav-tab" data-i18n="tab_scheduling" onclick="showTab('scheduling')">排班</button>
+      <button class="topnav-tab nav-tab" data-tab="employees" data-i18n="tab_employees" onclick="showTab('employees')">员工管理</button>
+      <button class="topnav-tab nav-tab active" data-tab="submissions" data-i18n="tab_submissions" onclick="showTab('submissions')">员工提交</button>
+      <button class="topnav-tab nav-tab" data-tab="locations" data-i18n="tab_locations" onclick="showTab('locations')">地点标记</button>
+      <button class="topnav-tab nav-tab" data-tab="scheduling" data-i18n="tab_scheduling" onclick="showTab('scheduling')">排班</button>
     </div>
     <div class="topnav-right" style="display:flex;align-items:center;gap:6px;">
       <span id="admin-nav-lang-switch"></span>
@@ -327,44 +328,55 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
         <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
         <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
       </select>
-      <button class="btn btn-primary btn-sm" onclick="loadSubmissions()">刷新</button>
+      <button class="btn btn-primary btn-sm" data-i18n="sub_refresh" onclick="loadSubmissions()">刷新</button>
     </div>
     <div id="new-employee-notice" class="notice notice-warn" style="display:none;" data-i18n="sub_new_emp_notice">
       ⚠️ 有新员工提交了班表，请前往「地点标记」标记其工作地点。
     </div>
     <div class="card">
       <div class="card-title">
-        <span>员工可工作时段提交汇总</span>
+        <span data-i18n="sub_card_title">员工可工作时段提交汇总</span>
         <span id="sub-count" style="font-size:12px;"></span>
       </div>
       <div style="overflow-x:auto;">
         <table class="sub-table">
-          <thead><tr><th>姓名</th><th>提交时间</th><th>可工作天数</th><th>时段预览</th><th>操作</th></tr></thead>
+          <thead><tr>
+            <th data-i18n="sub_col_name_th">姓名</th>
+            <th data-i18n="sub_col_submitted_th">提交时间</th>
+            <th data-i18n="sub_col_days_th">可工作天数</th>
+            <th data-i18n="sub_col_avail_th">时段预览</th>
+            <th data-i18n="sub_col_action_th">操作</th>
+          </tr></thead>
           <tbody id="sub-tbody">
-            <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted);">请选择月份并点击刷新，或载入示例数据</td></tr>
+            <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted);" data-i18n="sub_initial_hint">请选择月份并点击刷新，或载入示例数据</td></tr>
           </tbody>
         </table>
+      </div>
+      <div id="sub-dots-legend" style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin-top:10px;color:var(--text-muted);padding:0 2px;">
+        <span><span style="display:inline-block;width:10px;height:10px;background:#1c4f80;border-radius:2px;margin-right:4px;vertical-align:middle;"></span><span data-i18n="sub_legend_full">全天</span></span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#93c5fd;border-radius:2px;margin-right:4px;vertical-align:middle;"></span><span data-i18n="sub_legend_half">半天</span></span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#e2e8f0;border-radius:2px;margin-right:4px;vertical-align:middle;border:1px solid #cdd5e0;"></span><span data-i18n="sub_legend_off">休息</span></span>
       </div>
     </div>
   </div>
 
   <!-- ── TAB: LOCATIONS ── -->
   <div class="view" id="tab-locations">
-    <div class="notice notice-info">
+    <div class="notice notice-info" data-i18n="loc_hint">
       💡 点击 ✓ 为员工标记工作地点（可多选）。修改后自动保存，并同步至排班系统。
     </div>
     <div class="card">
-      <div class="card-title">员工工作地点标记</div>
+      <div class="card-title" data-i18n="loc_table_title">员工工作地点标记</div>
       <div style="overflow-x:auto;">
         <table class="sub-table" id="loc-table">
           <thead>
             <tr id="loc-table-header">
-              <th>姓名</th>
+              <th data-i18n="loc_col_name_th">姓名</th>
               <!-- populated dynamically from LOCATIONS -->
             </tr>
           </thead>
           <tbody id="loc-tbody">
-            <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">请先在「员工提交」页面加载员工数据</td></tr>
+            <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);" data-i18n="loc_initial_hint">请先在「员工提交」页面加载员工数据</td></tr>
           </tbody>
         </table>
       </div>
@@ -377,7 +389,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
   <!-- ── TAB: SCHEDULING ── -->
   <div class="view" id="tab-scheduling">
     <div class="sched-controls">
-      <label style="font-size:13px;color:var(--text-muted);">工作地点：</label>
+      <label style="font-size:13px;color:var(--text-muted);" data-i18n="sched_loc_label">工作地点：</label>
       <select class="loc-select" id="sched-location" onchange="renderScheduleGrid()">
         <!-- populated dynamically from LOCATIONS -->
       </select>
@@ -389,10 +401,10 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
         <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
         <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
       </select>
-      <button class="btn btn-primary btn-sm" data-i18n="sched_refresh" onclick="refreshScheduleGrid()" title="重新从服务器拉取最新数据并刷新排班表">刷新</button>
+      <button class="btn btn-primary btn-sm" data-i18n="sched_refresh" onclick="refreshScheduleGrid()">刷新</button>
       <button class="btn btn-ghost btn-sm" id="edit-emp-btn" data-i18n="sched_edit_emp" onclick="toggleEditMode()">✏️ 编辑员工</button>
       <button class="btn btn-ghost btn-sm" data-i18n="sched_settings" onclick="openSettingsModal()">⚙️ 设置</button>
-      <button class="btn btn-ghost btn-sm" data-i18n="sched_save" id="manual-save-btn" onclick="manualSave()" title="立即保存所有数据">💾 保存</button><span id="save-indicator" style="font-size:14px;margin-left:2px;vertical-align:middle;"></span>
+      <button class="btn btn-ghost btn-sm" data-i18n="sched_save" id="manual-save-btn" onclick="manualSave()">💾 保存</button><span id="save-indicator" style="font-size:14px;margin-left:2px;vertical-align:middle;"></span>
     </div>
 
     <div class="sched-legend">
@@ -417,8 +429,8 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
     </div>
 
     <div class="export-row">
-      <button class="btn btn-success" onclick="exportScheduleExcel()">📊 导出 Excel</button>
-      <button class="btn btn-ghost" onclick="exportSchedulePDF()">📄 导出 PDF</button>
+      <button class="btn btn-success" onclick="exportScheduleExcel()">📊 Excel</button>
+      <button class="btn btn-ghost" onclick="exportSchedulePDF()">📄 PDF</button>
     </div>
   </div>
 </div>
@@ -426,7 +438,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
   <!-- ── TAB: EMPLOYEES ── -->
   <div class="view" id="tab-employees">
     <div class="card">
-      <div class="card-title"><span data-i18n="emp_mgmt_title">👥 员工管理</span>
+      <div class="card-title" data-i18n="emp_mgmt_title"><span>👥 员工管理</span>
         <span id="emp-mgmt-count" style="font-weight:400;font-size:12px;color:var(--text-muted);"></span>
       </div>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;" data-i18n="emp_mgmt_subtitle">管理在职员工账号。新建员工后员工可用姓名和默认密码（123456）登录员工端。</div>
@@ -443,7 +455,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
     <!-- 地点管理 -->
     <div class="card" style="margin-top:16px;">
       <div class="card-title"><span data-i18n="loc_title">📍 地点管理</span></div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">新增或删除工作地点，地点将同步显示在「地点标记」和「排班」界面。</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;" data-i18n="loc_mgmt_subtitle">新增或删除工作地点，地点将同步显示在「地点标记」和「排班」界面。</div>
       <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
         <input type="text" id="new-loc-input" data-i18n="loc_add_ph" data-i18n-attr="placeholder" placeholder="输入地点名称" maxlength="30"
           style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:14px;outline:none;"
@@ -457,10 +469,10 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <!-- Detail modal -->
 <div class="modal-overlay" id="detail-modal">
   <div class="modal-box detail-modal-box">
-    <div class="modal-title" id="detail-modal-title" style="flex-shrink:0;">员工详情</div>
+    <div class="modal-title" id="detail-modal-title" style="flex-shrink:0;" data-i18n="detail_modal_title">员工详情</div>
     <div id="detail-modal-body" style="overflow-y:auto;flex:1;min-height:0;padding-right:4px;"></div>
     <div class="modal-actions" style="margin-top:14px;flex-shrink:0;">
-      <button class="btn btn-primary" onclick="document.getElementById('detail-modal').classList.remove('open')">关闭</button>
+      <button class="btn btn-primary" data-i18n="detail_modal_close" onclick="document.getElementById('detail-modal').classList.remove('open')">关闭</button>
     </div>
   </div>
 </div>
@@ -468,19 +480,19 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <!-- Edit employees modal -->
 <div class="modal-overlay" id="edit-emp-modal">
   <div class="modal-box">
-    <div class="modal-title">✏️ 编辑当月员工</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">仅影响当月排班列表，不影响地点标记。</div>
+    <div class="modal-title" data-i18n="edit_emp_modal_title">✏️ 编辑当月员工</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;" data-i18n="edit_emp_modal_desc">仅影响当月排班列表，不影响地点标记。</div>
     <div id="edit-emp-list" style="max-height:260px;overflow-y:auto;margin-bottom:12px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:4px;">
       <select id="add-emp-select" class="month-picker" style="flex:1;padding:8px 10px;font-size:13px;border-radius:7px;border:1.5px solid var(--border);">
-        <option value="">— 从已提交员工中选择 —</option>
+        <option value="" data-i18n="edit_emp_select_ph">— 从已提交员工中选择 —</option>
       </select>
-      <button class="btn btn-primary btn-sm" onclick="addTempEmployee()">添加</button>
+      <button class="btn btn-primary btn-sm" data-i18n="edit_emp_add_btn" onclick="addTempEmployee()">添加</button>
     </div>
     <div id="edit-emp-error" style="font-size:12px;color:#c0392b;min-height:16px;"></div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeEditEmpModal()">取消</button>
-      <button class="btn btn-primary" onclick="saveEditEmpModal()">确认</button>
+      <button class="btn btn-ghost" data-i18n="edit_emp_cancel" onclick="closeEditEmpModal()">取消</button>
+      <button class="btn btn-primary" data-i18n="edit_emp_confirm" onclick="saveEditEmpModal()">确认</button>
     </div>
   </div>
 </div>
@@ -491,7 +503,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
     <div class="modal-title" data-i18n="settings_title">⚙️ 排班设置</div>
 
     <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;" data-i18n="settings_slot_limit">排班人数限制</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">每个地点每天最多可排班人数。</div>
+    <div id="settings-slot-limit-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;"></div>
     <div id="settings-limit-list" style="margin-bottom:18px;"></div>
 
     <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-top:14px;border-top:1px solid var(--border);" data-i18n="settings_default_time">默认上下班时间（用于标准化员工提交数据）</div>
@@ -501,8 +513,8 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
     </div>
     <div id="settings-loc-times-list" style="margin-bottom:18px;"></div>
 
-    <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-top:14px;border-top:1px solid var(--border);">已确认班次管理</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">取消确认后，可对该周进行修改或清空重排。</div>
+    <div id="settings-confirmed-header" style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-top:14px;border-top:1px solid var(--border);"></div>
+    <div id="settings-confirmed-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;"></div>
     <div id="settings-confirmed-list" style="margin-bottom:10px;max-height:200px;overflow-y:auto;"></div>
 
     <div class="modal-actions">
@@ -530,22 +542,22 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 <!-- Edit assigned time modal -->
 <div class="modal-overlay" id="edit-time-modal">
   <div class="modal-box" style="max-width:320px;">
-    <div class="modal-title">修改排班时间</div>
+    <div class="modal-title" id="edit-time-modal-title" data-i18n="sched_edit_time">修改排班时间</div>
     <div id="edit-time-label" style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;"></div>
     <div id="edit-time-fields" style="display:flex;gap:10px;margin-bottom:8px;">
-      <label id="edit-time-start-wrap" style="font-size:13px;flex:1;">开始时间<br>
-        <input type="text" id="edit-time-start" placeholder="如 08:00" maxlength="5"
+      <label id="edit-time-start-wrap" style="font-size:13px;flex:1;"><span data-i18n="time_panel_start">开始时间</span><br>
+        <input type="text" id="edit-time-start" data-i18n="custom_time_start_ph" data-i18n-attr="placeholder" placeholder="如 08:00" maxlength="5"
           style="width:100%;margin-top:4px;font-family:'DM Mono',monospace;font-size:15px;border:1.5px solid var(--border);border-radius:6px;padding:7px 8px;text-align:center;letter-spacing:0.05em;">
       </label>
-      <label id="edit-time-end-wrap" style="font-size:13px;flex:1;">结束时间<br>
-        <input type="text" id="edit-time-end" placeholder="如 19:00 / 24:00" maxlength="5"
+      <label id="edit-time-end-wrap" style="font-size:13px;flex:1;"><span data-i18n="time_panel_end">结束时间</span><br>
+        <input type="text" id="edit-time-end" data-i18n="custom_time_end_ph" data-i18n-attr="placeholder" placeholder="如 19:00 / 24:00" maxlength="5"
           style="width:100%;margin-top:4px;font-family:'DM Mono',monospace;font-size:15px;border:1.5px solid var(--border);border-radius:6px;padding:7px 8px;text-align:center;letter-spacing:0.05em;">
       </label>
     </div>
     <div id="edit-time-error" style="font-size:12px;color:#c0392b;min-height:18px;margin-bottom:8px;"></div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeEditTimeModal()">取消</button>
-      <button class="btn btn-primary" onclick="applyEditTime()">确认修改</button>
+      <button class="btn btn-ghost" data-i18n="cancel" onclick="closeEditTimeModal()">取消</button>
+      <button class="btn btn-primary" data-i18n="time_panel_confirm" onclick="applyEditTime()">确认修改</button>
     </div>
   </div>
 </div>
@@ -598,7 +610,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
   <div class="modal-box" style="max-width:380px;">
     <div class="modal-title" data-i18n="del_emp_title">删除员工</div>
     <div id="del-emp-name" style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text);"></div>
-    <div style="font-size:13px;color:var(--text-muted);margin-bottom:18px;line-height:1.8;">请选择删除方式：</div>
+    <div id="del-emp-method-label" style="font-size:13px;color:var(--text-muted);margin-bottom:18px;line-height:1.8;">请选择删除方式：</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px;">
       <button onclick="deleteEmployeeResigned(_delEmpTarget)" class="btn" style="text-align:left;padding:12px 14px;border:1.5px solid var(--border);border-radius:8px;background:#f8faff;font-family:inherit;">
         <div style="font-weight:600;font-size:13px;margin-bottom:3px;" data-i18n="del_emp_resigned_label">离职员工</div>
@@ -1212,10 +1224,10 @@ function getSlotLimit(loc) {
 // ── TABS ──
 function showTab(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.topnav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const tabs = ['employees','submissions','locations','scheduling'];
-  document.querySelectorAll('.topnav-tab')[tabs.indexOf(name)].classList.add('active');
+  const tabEl = document.querySelector(`.nav-tab[data-tab="${name}"]`);
+  if (tabEl) tabEl.classList.add('active');
   appState.currentTab = name;
   if (name === 'locations') renderLocationTab();
   if (name === 'scheduling') renderScheduleGrid();
@@ -1305,7 +1317,7 @@ async function fetchAndCacheSubs(year, month, silent) {
       data.submissions.forEach(s => { appState.allEmployees[s.name] = true; });
       persistData();
     }
-  } catch(e) { if (!silent) alert('加载数据失败：' + e.message); }
+  } catch(e) { if (!silent) alert(getLang()==='en' ? 'Failed to load data: ' + e.message : '加载数据失败：' + e.message); }
   finally { if (!silent) showLoading(false); }
 }
 
@@ -1386,9 +1398,13 @@ function renderSubmissionsTable() {
 
     // 可工作天数 + 点阵
     const workDays = s && s.schedule ? s.schedule.filter(d => d.slot !== 'off').length : '—';
+    const slotLbl = getLang()==='en'
+      ? {full:'Full Day',half:'Half Day',am:'Half Day',pm:'Half Day',custom:'Half Day',off:'Off'}
+      : {full:'全天',half:'半天',am:'半天',pm:'半天',custom:'半天',off:'休息'};
     const dots = s && s.schedule ? s.schedule.slice(0,31).map(d => {
-      const cls = d.slot==='full'?'dot-full':d.slot==='am'?'dot-am':d.slot==='pm'?'dot-pm':'dot-off';
-      return `<span class="avail-dot ${cls}" title="${d.date}: ${d.slot}"></span>`;
+      const isHalf = d.slot==='am'||d.slot==='pm'||d.slot==='half'||d.slot==='custom';
+      const cls = d.slot==='full' ? 'dot-full' : isHalf ? 'dot-half' : 'dot-off';
+      return `<span class="avail-dot ${cls}" title="${d.date}: ${slotLbl[d.slot]||d.slot}"></span>`;
     }).join('') : '';
 
     const safeName = name.replace(/'/g,"\\'");
@@ -1504,9 +1520,10 @@ function viewPersonDetail(name) {
     const entry = sub.schedule ? sub.schedule.find(e => e.date === dateKey) : null;
     const slot = entry ? entry.slot : 'off';
     const isWorking = slot && slot !== 'off';
-    const cls = isWorking ? 'd-full' : 'd-off';
+    const isHalf = slot === 'am' || slot === 'pm' || slot === 'half' || slot === 'custom';
+    const cls = !isWorking ? 'd-off' : isHalf ? 'd-am' : 'd-full';
     const timeRange = entry && entry.start && entry.end
-      ? `${fmtTime(entry.start)}–${fmtTime(entry.end)}` : (isWorking ? t('cal_slot_full') : '');
+      ? `${fmtTime(entry.start)}–${fmtTime(entry.end)}` : '';
     const changedStyle = changedDates.has(dateKey) ? ' style="outline:2px solid #e67e22;outline-offset:-2px;"' : '';
     cal += `<div class="detail-cal-day ${cls}"${changedStyle}>
       <span class="d-num">${d}</span>
@@ -1516,7 +1533,8 @@ function viewPersonDetail(name) {
   cal += `</div>`;
 
   const legend = `<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin-top:10px;color:var(--text-muted);">
-    <span><span style="display:inline-block;width:10px;height:10px;background:#1c4f80;border-radius:2px;margin-right:3px;"></span>${t('sub_legend_work')}</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#1c4f80;border-radius:2px;margin-right:3px;"></span>${t('sub_legend_full')}</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#bfdbfe;border-radius:2px;margin-right:3px;border:1px solid #93c5fd;"></span>${t('sub_legend_half')}</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#f0f4fa;border-radius:2px;margin-right:3px;border:1px solid #ddd;"></span>${t('sub_legend_off')}</span>
     ${isUpdated && changedDates.size > 0 ? `<span><span style="display:inline-block;width:10px;height:10px;border:2px solid #e67e22;border-radius:2px;margin-right:3px;"></span>${t('sub_legend_changed')}</span>` : ''}
   </div>`;
@@ -1577,7 +1595,7 @@ function renderLocationTab() {
     }).join('');
     const isNew = assigned.length === 0;
     return `<tr>
-      <td class="name-cell">${name}${isNew?'<span class="new-badge">未标记</span>':''}</td>${cells}</tr>`;
+      <td class="name-cell">${name}${isNew?`<span class="new-badge">${getLang()==='en'?'Unassigned':'未标记'}</span>`:''}</td>${cells}</tr>`;
   }).join('');
 }
 
@@ -1626,14 +1644,14 @@ function renderLocMgmt() {
   if (!el) return;
   const locs = getLocations();
   if (locs.length === 0) {
-    el.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px;">暂无地点</div>`;
+    el.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px;">${getLang()==='en' ? 'No locations yet.' : '暂无地点'}</div>`;
     return;
   }
   el.innerHTML = locs.map((loc, i) => {
     const safeLoc = loc.replace(/'/g, "\\'");
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);font-size:14px;">
       <span>${loc}</span>
-      <button class="btn btn-danger btn-sm" style="font-size:11px;" onclick="deleteLocation('${safeLoc}')">删除</button>
+      <button class="btn btn-danger btn-sm" style="font-size:11px;" onclick="deleteLocation('${safeLoc}')">${getLang()==='en' ? 'Delete' : '删除'}</button>
     </div>`;
   }).join('');
 }
@@ -1809,6 +1827,8 @@ let _delEmpTarget = '';
 function confirmDeleteEmployee(name) {
   _delEmpTarget = name;
   document.getElementById('del-emp-name').textContent = getLang()==='en' ? `Staff: ${name}` : `员工：${name}`;
+  document.getElementById('del-emp-method-label').textContent = getLang()==='en' ? 'Select removal method:' : '请选择删除方式：';
+  applyI18n();
   document.getElementById('del-emp-modal').classList.add('open');
 }
 
@@ -2404,7 +2424,7 @@ function _openBatchEditTimePanel(modeSource) {
         rawTargets.push({ name, dateKey: entry.date, origSlot: isFullDay ? 'full' : 'half', slot: 'both' });
       });
     });
-    if (rawTargets.length === 0) { alert('所选员工在本周均无可工作日，无法修改时间。'); return; }
+    if (rawTargets.length === 0) { alert(getLang()==='en' ? 'The selected staff have no working days this week.' : '所选员工在本周均无可工作日，无法修改时间。'); return; }
   } else {
     _btSelectedCells.forEach(({ name, dateKey, slot }) => {
       const sub = getSubForLoc(name, loc, year, month);
@@ -2416,7 +2436,7 @@ function _openBatchEditTimePanel(modeSource) {
       if (!existing) rawTargets.push({ name, dateKey, origSlot: isFullDay ? 'full' : 'half', slot });
       else if (existing.slot !== slot) existing.slot = 'both';
     });
-    if (rawTargets.length === 0) { alert('所选格子均无员工提交数据，无法修改时间。'); return; }
+    if (rawTargets.length === 0) { alert(getLang()==='en' ? 'The selected cells have no submitted data.' : '所选格子均无员工提交数据，无法修改时间。'); return; }
   }
 
   document._btRawTargets = rawTargets;
@@ -2428,9 +2448,10 @@ function _openBatchEditTimePanel(modeSource) {
   const hasHalf = rawTargets.some(t => t.origSlot === 'half');
 
   const labelEl = document.getElementById('batch-edit-time-label');
+  const isEnBt = getLang() === 'en';
   labelEl.textContent = modeSource === 'name'
-    ? `已选员工：${names}\n请选择修改哪种时段：`
-    : `已选 ${rawTargets.length} 个格子（${names}）`;
+    ? (isEnBt ? `Selected staff: ${names}\nChoose shift type to modify:` : `已选员工：${names}\n请选择修改哪种时段：`)
+    : (isEnBt ? `${rawTargets.length} cell(s) selected (${names})` : `已选 ${rawTargets.length} 个格子（${names}）`);
 
   // 全天/半天选项：只有名字模式才显示（拖选时格子已明确）
   const daytypeRow = document.getElementById('batch-edit-daytype-row');
@@ -2554,7 +2575,7 @@ function applyBatchEditTime() {
 
   const rawStart = document.getElementById('batch-edit-time-start').value.trim();
   const rawEnd   = document.getElementById('batch-edit-time-end').value.trim();
-  if (!rawStart && !rawEnd) { errEl.textContent = '请至少填写一个时间（留空则该字段保持原值）'; return; }
+  if (!rawStart && !rawEnd) { errEl.textContent = getLang()==='en' ? 'Please enter at least one time (leave blank to keep existing)' : '请至少填写一个时间（留空则该字段保持原值）'; return; }
 
   const start = rawStart ? normalizeTimeInput(rawStart) : null;
   const end   = rawEnd   ? normalizeTimeInput(rawEnd)   : null;
@@ -2564,7 +2585,7 @@ function applyBatchEditTime() {
   // 重新触发一次过滤（确保 _btTargets 与当前 daytype/输入一致）
   _updateBtPreviewHighlight();
   const targets = document._btTargets;
-  if (!targets || targets.length === 0) { errEl.textContent = '当前条件下没有可修改的格子'; return; }
+  if (!targets || targets.length === 0) { errEl.textContent = getLang()==='en' ? 'No cells to modify under current conditions.' : '当前条件下没有可修改的格子'; return; }
 
   const { loc, year, month, weekIdx } = _btCtx;
   const monthSubs = getMonthSubs(year, month);
@@ -2581,12 +2602,16 @@ function applyBatchEditTime() {
     const editS = (slot === 'start' || slot === 'both') && start;
     const editE = (slot === 'end'   || slot === 'both') && end;
     const exc = [];
-    if (editS && timeToMinsAdm(start) < empS) exc.push(`开始 ${fmtTime(start)} 早于员工填写的 ${fmtTime(empDay.start)}`);
-    if (editE && timeToMinsAdm(end)   > empE) exc.push(`结束 ${fmtTime(end)} 晚于员工填写的 ${fmtTime(empDay.end)}`);
-    if (exc.length) warnings.push(`${name}（${dateKey.slice(-5)}）：${exc.join('；')}`);
+    const isEn2 = getLang() === 'en';
+    if (editS && timeToMinsAdm(start) < empS) exc.push(isEn2 ? `Start ${fmtTime(start)} is earlier than staff's ${fmtTime(empDay.start)}` : `开始 ${fmtTime(start)} 早于员工填写的 ${fmtTime(empDay.start)}`);
+    if (editE && timeToMinsAdm(end)   > empE) exc.push(isEn2 ? `End ${fmtTime(end)} is later than staff's ${fmtTime(empDay.end)}` : `结束 ${fmtTime(end)} 晚于员工填写的 ${fmtTime(empDay.end)}`);
+    if (exc.length) warnings.push(isEn2 ? `${name} (${dateKey.slice(-5)}): ${exc.join('; ')}` : `${name}（${dateKey.slice(-5)}）：${exc.join('；')}`);
   });
   if (warnings.length > 0) {
-    if (!confirm(`⚠️ 以下时间超出员工填写范围，请提前通知：\n\n${warnings.join('\n')}\n\n是否继续保存？`)) return;
+    const warnMsg = getLang()==='en'
+      ? `⚠️ The following times exceed staff-submitted ranges. Please notify staff in advance:\n\n${warnings.join('\n')}\n\nContinue saving?`
+      : `⚠️ 以下时间超出员工填写范围，请提前通知：\n\n${warnings.join('\n')}\n\n是否继续保存？`;
+    if (!confirm(warnMsg)) return;
   }
 
   _pushTimeUndo(loc, year, month);
@@ -2733,25 +2758,22 @@ function getEligibleEmployees(loc, year, month) {
 // 刷新排班表：重新从服务器拉取最新员工提交数据 + 重新加载管理员状态 + 重绘
 async function refreshScheduleGrid() {
   const btn = event && event.target;
-  if (btn) { btn.disabled = true; btn.textContent = '刷新中…'; }
+  if (btn) { btn.disabled = true; btn.textContent = getLang()==='en' ? 'Loading…' : '刷新中…'; }
   try {
-    // 重新拉取服务器最新 AdminState（员工增删/地点变更等）
     await loadPersistedData();
-    // 重新拉取当前月份的员工提交数据
     const year  = parseInt(document.getElementById('sched-year').value);
     const month = parseInt(document.getElementById('sched-month').value);
     const loc   = document.getElementById('sched-location').value;
     await fetchAndCacheSubs(year, month, true);
-    // 强制重新拉取当前地点排班表
     await fetchAndCacheSchedule(loc, year, month, true);
     _prefetchAdjacentMonths(loc, year, month);
     renderScheduleGrid();
     renderEmpMgmt();
     renderLocationTab();
   } catch(e) {
-    console.warn('刷新失败:', e);
+    console.warn('refresh failed:', e);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '刷新'; }
+    if (btn) { btn.disabled = false; btn.textContent = t('sched_refresh'); }
   }
 }
 
@@ -2846,7 +2868,7 @@ function renderScheduleGrid() {
     const lastSlot = [...wk].reverse().find(s => s !== null);
     const wTitle = getLang() === 'en'
       ? `Week ${wi+1}  ${month}/${firstSlot.d} – ${month}/${lastSlot.d}`
-      : `第${wi+1}周　${month}/${firstSlot.d} – ${month}/${lastSlot.d}`;
+      : `第${wi+1}周　${month}/${firstSlot.d}–${month}/${lastSlot.d}`;
     const confirmed = isWeekConfirmed(loc, year, month, wi);
 
     // Collect dateKeys for this week (for clear/auto buttons)
@@ -2961,7 +2983,7 @@ function renderScheduleGrid() {
               endTimeWarn = ovEndMins > origEndMins;
             }
             const origTimeNote = (startTimeWarn || endTimeWarn) && empOrigStart && empOrigEnd
-              ? `（员工原填：${fmtTime(empOrigStart)}–${fmtTime(empOrigEnd)}）` : '';
+              ? (getLang()==='en' ? ` (staff: ${fmtTime(empOrigStart)}–${fmtTime(empOrigEnd)})` : `（员工原填：${fmtTime(empOrigStart)}–${fmtTime(empOrigEnd)}）`) : '';
 
             // start 和 end 联动：两格共享同一个排班状态
             {
@@ -3057,16 +3079,25 @@ function renderScheduleGrid() {
               }
               if (isToday && !isPast && !confirmed) { startCls += ' today'; endCls += ' today'; }
 
-              const titleStart = !hasSubmitted && !isChecked ? `${name} 尚未提交班表`
-                : confirmed ? `${name} ${dateKey} 起始（点击修改时间）`
-                : elsewhere ? `${name} 当天已在「${elsewhereLoc}」排班`
-                : isChecked ? `${name} 起始 ${empStart||'未填'}（单击取消；双击改时间）`
-                : `${name} ${dateKey} 起始：${empStart||'未填'}`;
-              const titleEnd = !hasSubmitted && !isChecked ? `${name} 尚未提交班表`
-                : confirmed ? `${name} ${dateKey} 结束（点击修改时间）`
-                : elsewhere ? `${name} 当天已在「${elsewhereLoc}」排班`
-                : isChecked ? `${name} 结束 ${empEnd||'未填'}（单击取消；双击改时间）`
-                : `${name} ${dateKey} 结束：${empEnd||'未填'}`;
+              const isEn = getLang() === 'en';
+              const titleStart = !hasSubmitted && !isChecked
+                ? (isEn ? `${name} has not submitted` : `${name} 尚未提交班表`)
+                : confirmed
+                  ? (isEn ? `${name} ${dateKey} start (click to edit time)` : `${name} ${dateKey} 起始（点击修改时间）`)
+                  : elsewhere
+                    ? (isEn ? `${name} is already scheduled at ${elsewhereLoc} that day` : `${name} 当天已在「${elsewhereLoc}」排班`)
+                    : isChecked
+                      ? (isEn ? `${name} start ${empStart||'—'} (click to deselect; dbl-click to edit)` : `${name} 起始 ${empStart||'未填'}（单击取消；双击改时间）`)
+                      : (isEn ? `${name} ${dateKey} start: ${empStart||'—'}` : `${name} ${dateKey} 起始：${empStart||'未填'}`);
+              const titleEnd = !hasSubmitted && !isChecked
+                ? (isEn ? `${name} has not submitted` : `${name} 尚未提交班表`)
+                : confirmed
+                  ? (isEn ? `${name} ${dateKey} end (click to edit time)` : `${name} ${dateKey} 结束（点击修改时间）`)
+                  : elsewhere
+                    ? (isEn ? `${name} is already scheduled at ${elsewhereLoc} that day` : `${name} 当天已在「${elsewhereLoc}」排班`)
+                    : isChecked
+                      ? (isEn ? `${name} end ${empEnd||'—'} (click to deselect; dbl-click to edit)` : `${name} 结束 ${empEnd||'未填'}（单击取消；双击改时间）`)
+                      : (isEn ? `${name} ${dateKey} end: ${empEnd||'—'}` : `${name} ${dateKey} 结束：${empEnd||'未填'}`);
 
               // 时间改动标注
               if (startTimeWarn) { startCls += ' time-override-warn'; }
@@ -3098,7 +3129,7 @@ function renderScheduleGrid() {
     outerHtml += `</tbody></table></div></div>`;
   });
 
-  document.getElementById('sched-grid-container').innerHTML = outerHtml || '<p style="color:var(--text-muted);padding:20px;">本月无数据</p>';
+  document.getElementById('sched-grid-container').innerHTML = outerHtml || `<p style="color:var(--text-muted);padding:20px;">${getLang()==='en' ? 'No data for this month.' : '本月无数据'}</p>`;
 }
 
 // ── AUTO SCHEDULE ──
@@ -3193,18 +3224,28 @@ function openSettingsModal() {
   document.getElementById('settings-loc-times-list').innerHTML = locTimesHtml;
 
   // Confirmed weeks section
-  const confirmedEntries = Object.keys(appState.confirmedWeeks).filter(k => appState.confirmedWeeks[k]);
+  const curLoc = document.getElementById('sched-location') && document.getElementById('sched-location').value;
+  // 只显示当前地点的已确认班次
+  const confirmedEntries = Object.keys(appState.confirmedWeeks).filter(k => {
+    if (!appState.confirmedWeeks[k]) return false;
+    const parts = k.split('||');
+    // key format: "loc||year||month||weekIdx" — loc may contain "||" if loc name had it, but we use 4 parts from end
+    const cloc = parts.slice(0, parts.length - 3).join('||');
+    return cloc === curLoc;
+  });
   let confirmedHtml = '';
   if (confirmedEntries.length === 0) {
-    confirmedHtml = `<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">${getLang()==='en' ? 'No confirmed weeks.' : '暂无已确认的班次。'}</div>`;
+    confirmedHtml = `<div style="font-size:13px;color:var(--text-muted);padding:8px 0;">${getLang()==='en' ? 'No confirmed weeks for this location.' : '当前地点暂无已确认的班次。'}</div>`;
   } else {
     confirmedHtml = confirmedEntries.map(k => {
       const parts = k.split('||');
-      const [cloc, cyear, cmonth, cwi] = parts;
+      const cwi   = parts[parts.length - 1];
+      const cmonth = parts[parts.length - 2];
+      const cyear  = parts[parts.length - 3];
       const months = t('cal_months');
       const label = getLang()==='en'
-        ? `${cloc} · ${months[parseInt(cmonth)-1]} ${cyear} Week ${parseInt(cwi)+1}`
-        : `${cloc} · ${cyear}年${cmonth}月 第${parseInt(cwi)+1}周`;
+        ? `${months[parseInt(cmonth)-1]} ${cyear} — Week ${parseInt(cwi)+1}`
+        : `${cyear}年${cmonth}月 第${parseInt(cwi)+1}周`;
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee;">
         <span style="font-size:13px;">🔒 ${label}</span>
         <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 10px;"
@@ -3293,12 +3334,12 @@ function toggleEditMode() {
   _editMode = !_editMode;
   const btn = document.getElementById('edit-emp-btn');
   if (_editMode) {
-    btn.textContent = '✏️ 编辑中…';
+    btn.textContent = getLang()==='en' ? '✏️ Editing…' : '✏️ 编辑中…';
     btn.style.background = '#fef3c7';
     btn.style.borderColor = '#f59e0b';
     openEditEmpModal();
   } else {
-    btn.textContent = '✏️ 编辑员工';
+    btn.textContent = t('sched_edit_emp');
     btn.style.background = '';
     btn.style.borderColor = '';
   }
@@ -3315,13 +3356,15 @@ function openEditEmpModal() {
 
   let listHtml = current.map(name => {
     const isAdded = ov.added.includes(name);
-    const tag = isAdded ? `<span style="font-size:10px;background:#d1fae5;color:#065f46;border-radius:8px;padding:1px 6px;margin-left:4px;">新增</span>` : '';
+    const addedLabel = getLang()==='en' ? 'Added' : '新增';
+    const tag = isAdded ? `<span style="font-size:10px;background:#d1fae5;color:#065f46;border-radius:8px;padding:1px 6px;margin-left:4px;">${addedLabel}</span>` : '';
+    const removeLabel = getLang()==='en' ? 'Remove' : '移除';
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;">
       <span style="font-size:13px;">${name}${tag}</span>
-      <button class="btn btn-danger btn-sm" style="padding:3px 10px;font-size:11px;" onclick="markEmpRemoved('${loc}',${year},${month},'${name.replace(/'/g,"\\'")}',this)">移除</button>
+      <button class="btn btn-danger btn-sm" style="padding:3px 10px;font-size:11px;" onclick="markEmpRemoved('${loc}',${year},${month},'${name.replace(/'/g,"\\'")}',this)">${removeLabel}</button>
     </div>`;
   }).join('');
-  if (!listHtml) listHtml = `<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">暂无员工</div>`;
+  if (!listHtml) listHtml = `<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">${getLang()==='en' ? 'No staff' : '暂无员工'}</div>`;
 
   document.getElementById('edit-emp-list').innerHTML = listHtml;
   document.getElementById('edit-emp-error').textContent = '';
@@ -3331,8 +3374,8 @@ function openEditEmpModal() {
   const addable = submittedNames.filter(n => !current.includes(n));
   const sel = document.getElementById('add-emp-select');
   sel.innerHTML = addable.length
-    ? `<option value="">— 从已提交员工中选择 —</option>` + addable.map(n => `<option value="${n}">${n}</option>`).join('')
-    : `<option value="">（本月无可添加员工）</option>`;
+    ? `<option value="">${getLang()==='en' ? '— Select from submitted staff —' : '— 从已提交员工中选择 —'}</option>` + addable.map(n => `<option value="${n}">${n}</option>`).join('')
+    : `<option value="">${getLang()==='en' ? '(No staff to add this month)' : '（本月无可添加员工）'}</option>`;
 
   document.getElementById('edit-emp-modal').classList.add('open');
 }
@@ -3357,7 +3400,7 @@ function markEmpRemoved(loc, year, month, name, btn) {
   // Visually mark in the list
   btn.closest('div').style.opacity = '0.4';
   btn.disabled = true;
-  btn.textContent = '已移除';
+  btn.textContent = getLang()==='en' ? 'Removed' : '已移除';
 }
 
 function addTempEmployee() {
@@ -3382,7 +3425,7 @@ function saveEditEmpModal() {
   closeEditEmpModal();
   _editMode = false;
   const btn = document.getElementById('edit-emp-btn');
-  btn.textContent = '✏️ 编辑员工';
+  btn.textContent = t('sched_edit_emp');
   btn.style.background = '';
   btn.style.borderColor = '';
   document.getElementById('sched-grid-container').classList.remove('edit-mode');
@@ -3434,7 +3477,8 @@ function exportScheduleExcel() {
   const merges = [];
 
   // Title
-  aoa.push([`${loc}　${year}年${month}月 排班表`]);
+  const xlsTitle = getLang()==='en' ? `${loc} — ${t('cal_months')[month-1]} ${year} Schedule` : `${loc}　${year}年${month}月 排班表`;
+  aoa.push([xlsTitle]);
   merges.push({ s:{r:0,c:0}, e:{r:0,c:15} });
   aoa.push([]);
 
@@ -3443,13 +3487,15 @@ function exportScheduleExcel() {
     const lastSlot  = [...wkArr].reverse().find(s=>s!==null);
     const startRow  = aoa.length;
 
-    // Header row 1: 员工 | 周X M/d (colspan=2 each) | 周工时
-    const hRow1 = ['员工'];
+    // Header row 1: Staff | WeekN M/d (colspan=2 each) | Weekly Hours
+    const xlsEmpLabel   = getLang()==='en' ? 'Staff' : '员工';
+    const xlsHoursLabel = getLang()==='en' ? 'Weekly Hrs' : '周工时';
+    const hRow1 = [xlsEmpLabel];
     wkArr.forEach(slot => {
       hRow1.push(slot ? `${DAY_ZH[slot.wd]} ${month}/${slot.d}` : '');
       hRow1.push('');
     });
-    hRow1.push('周工时');
+    hRow1.push(xlsHoursLabel);
     aoa.push(hRow1);
 
     // Merges: each day header spans 2 cols
@@ -3461,11 +3507,13 @@ function exportScheduleExcel() {
     merges.push({ s:{r:startRow,c:0},  e:{r:startRow+1,c:0} });
     merges.push({ s:{r:startRow,c:15}, e:{r:startRow+1,c:15} });
 
-    // Header row 2: 开始|结束 per day
+    // Header row 2: Start|End per day
+    const xlsStartLabel = getLang()==='en' ? 'Start' : '开始';
+    const xlsEndLabel   = getLang()==='en' ? 'End' : '结束';
     const hRow2 = [''];
     wkArr.forEach(slot => {
-      hRow2.push(slot ? '开始' : '');
-      hRow2.push(slot ? '结束' : '');
+      hRow2.push(slot ? xlsStartLabel : '');
+      hRow2.push(slot ? xlsEndLabel : '');
     });
     hRow2.push('');
     aoa.push(hRow2);
@@ -3507,7 +3555,8 @@ function exportScheduleExcel() {
   ws['!cols'] = [{wch:12}, ...Array(14).fill({wch:7}), {wch:7}];
   const sheetName = loc.replace(/[\/\\?*\[\]:]/g,'_').slice(0,31);
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, `排班表_${loc}_${year}${String(month).padStart(2,'0')}.xlsx`);
+  const xlsFilename = getLang()==='en' ? `Schedule_${loc}_${year}${String(month).padStart(2,'0')}.xlsx` : `排班表_${loc}_${year}${String(month).padStart(2,'0')}.xlsx`;
+  XLSX.writeFile(wb, xlsFilename);
 }
 
 // ── EXPORT PDF ──
@@ -3552,8 +3601,8 @@ function exportSchedulePDF() {
     const firstSlot = wkArr.find(s=>s!==null);
     const lastSlot  = [...wkArr].reverse().find(s=>s!==null);
     const wLabel = getLang() === 'en'
-      ? `Week ${wi+1}  ${month}/${firstSlot.d} – ${month}/${lastSlot.d}`
-      : `第${wi+1}周  ${month}/${firstSlot.d} – ${month}/${lastSlot.d}`;
+      ? `Week ${wi+1}  ${month}/${firstSlot.d}–${month}/${lastSlot.d}`
+      : `第${wi+1}周  ${month}/${firstSlot.d}–${month}/${lastSlot.d}`;
     const empCount  = eligible.length;
     const H = TITLE_H + HEAD_H + empCount * ROW_H + 2;
 
@@ -3638,7 +3687,7 @@ function exportSchedulePDF() {
 
   // Open new window and render all week SVGs
   const win = window.open('', '_blank');
-  if (!win) { alert('请允许弹出窗口'); return; }
+  if (!win) { alert(getLang()==='en' ? 'Please allow pop-ups for this page.' : '请允许弹出窗口'); return; }
   const titleStr = getLang() === 'en'
     ? `${loc} — ${monthNames[month-1]} ${year} Schedule`
     : `${loc}　${year}年${monthNames[month-1]} 排班表`;

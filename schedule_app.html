@@ -599,15 +599,17 @@ body {
 }
 </style>
 <script src="config.js"></script>
+<script src="i18n.js"></script>
 </head>
 <body>
 
 <nav class="topnav">
   <span class="topnav-title" id="nav-title">班表</span>
   <div class="topnav-tabs">
-    <button class="topnav-tab active" onclick="showView('calendar')">日历</button>
-    <button class="topnav-tab" onclick="showView('roster')">班表</button>
+    <button class="topnav-tab active" id="tab-calendar" onclick="showView('calendar')" data-i18n="app_tab_calendar">日历</button>
+    <button class="topnav-tab" id="tab-roster" onclick="showView('roster')" data-i18n="app_tab_roster">班表</button>
   </div>
+  <div id="app-nav-lang-switch" style="display:flex;align-items:center;"></div>
 </nav>
 
 <!-- CALENDAR VIEW -->
@@ -615,12 +617,12 @@ body {
 
   <!-- 名称 + 月份 行 -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;">
-    <input class="form-input" id="s-name" type="text" placeholder="请输入名称"
+    <input class="form-input" id="s-name" type="text" data-i18n="app_name_ph" data-i18n-attr="placeholder" placeholder="请输入名称"
       style="max-width:140px;min-width:100px;flex-shrink:0;margin:0;"
       oninput="onNameInput(this.value)">
     <div style="text-align:center;flex:1;">
       <div class="cal-month-label" id="cal-month-label"></div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">请填写下个月可工作时间</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" data-i18n="app_cal_hint">请填写下个月可工作时间</div>
     </div>
     <div style="width:140px;"></div>
   </div>
@@ -640,39 +642,39 @@ body {
   </div>
 
   <div class="cal-legend">
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f5c0cc;border:1px solid #d97090;"></div>上午可工作</div>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#b8d4f0;border:1px solid #4a7fb5;"></div>下午可工作</div>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e8f0f8;border:1px solid #aac4d8;"></div>休息</div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f5c0cc;border:1px solid #d97090;"></div><span data-i18n="app_legend_am">上午可工作</span></div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#b8d4f0;border:1px solid #4a7fb5;"></div><span data-i18n="app_legend_pm">下午可工作</span></div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e8f0f8;border:1px solid #aac4d8;"></div><span data-i18n="app_legend_off">休息</span></div>
   </div>
-  <div style="margin-top:10px;font-size:12px;color:var(--text-muted);text-align:center;">点击日期可手动覆盖排班</div>
+  <div style="margin-top:10px;font-size:12px;color:var(--text-muted);text-align:center;" data-i18n="app_click_hint">点击日期可手动覆盖排班</div>
 
   <!-- 默认规则（内嵌） -->
   <div class="settings-section" style="margin-top:20px;">
-    <h3>默认规则</h3>
+    <h3 data-i18n="app_default_rules">默认规则</h3>
     <div class="rule-builder">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">点击星期设置可工作时段，再次点击切换全天／半天／清除：</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;" data-i18n="app_rule_hint">点击星期设置可工作时段，再次点击切换全天／半天／清除：</div>
       <!-- 星期格 -->
       <div class="rule-day-grid" id="rule-day-grid"></div>
       <!-- 全天/半天 选择按钮 + 清除 -->
       <div class="rule-slot-picker" style="margin-top:10px;">
-        <button class="slot-btn" id="sb-full" onclick="setSlotMode('full')">☀️ 全天</button>
-        <button class="slot-btn" id="sb-half" onclick="setSlotMode('half')">🌤 半天</button>
-        <button class="slot-btn" id="sb-off" onclick="clearAllRules()" style="flex:none;padding:8px 12px;">🔄 全部清除</button>
+        <button class="slot-btn" id="sb-full" onclick="setSlotMode('full')" data-i18n="app_btn_full">☀️ 全天</button>
+        <button class="slot-btn" id="sb-half" onclick="setSlotMode('half')" data-i18n="app_btn_half">🌤 半天</button>
+        <button class="slot-btn" id="sb-off" onclick="clearAllRules()" style="flex:none;padding:8px 12px;" data-i18n="app_btn_clear_all">🔄 全部清除</button>
       </div>
       <!-- 时间设置 -->
       <div id="time-settings-box" style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f0f6fc;border-radius:8px;padding:10px;">
-        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;">全天时段</div>
-        <label style="font-size:12px;color:var(--text);">开始 <input type="time" id="t-full-start" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
-        <label style="font-size:12px;color:var(--text);">结束 <input type="time" id="t-full-end" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
-        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;margin-top:4px;">半天时段</div>
-        <label style="font-size:12px;color:var(--text);">开始 <input type="time" id="t-half-start" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
-        <label style="font-size:12px;color:var(--text);">结束 <input type="time" id="t-half-end" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;" data-i18n="app_full_time_section">全天时段</div>
+        <label style="font-size:12px;color:var(--text);"><span data-i18n="app_time_start">开始</span> <input type="time" id="t-full-start" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+        <label style="font-size:12px;color:var(--text);"><span data-i18n="app_time_end">结束</span> <input type="time" id="t-full-end" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;margin-top:4px;" data-i18n="app_half_time_section">半天时段</div>
+        <label style="font-size:12px;color:var(--text);"><span data-i18n="app_time_start">开始</span> <input type="time" id="t-half-start" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+        <label style="font-size:12px;color:var(--text);"><span data-i18n="app_time_end">结束</span> <input type="time" id="t-half-end" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
       </div>
     </div>
     <div id="rule-preview" style="font-size:12px;color:var(--text-muted);line-height:1.8;margin-top:8px;"></div>
   </div>
 
-  <button class="generate-btn" onclick="generateRoster()">生成班表 →</button>
+  <button class="generate-btn" data-i18n="app_generate_btn" onclick="generateRoster()">生成班表 →</button>
 </div>
 
 
@@ -685,18 +687,18 @@ body {
   <div class="roster-legend">
     <div class="roster-legend-item">
       <div class="roster-legend-swatch" style="background:#90c4e8;"></div>
-      全天
+      <span data-i18n="app_slot_full">全天</span>
     </div>
     <div class="roster-legend-item">
       <div class="roster-legend-swatch" style="background:#d0ecf8;"></div>
-      半天
+      <span data-i18n="app_slot_half">半天</span>
     </div>
   </div>
 
   <div style="margin-top:14px;" id="roster-content"></div>
 
   <!-- Submit button -->
-  <button class="submit-btn" id="submit-btn" onclick="openSubmitConfirm()">
+  <button class="submit-btn" id="submit-btn" data-i18n="app_submit_btn" onclick="openSubmitConfirm()">
     ✉️ 提交班表给管理员
   </button>
   <div class="submit-status" id="submit-status"></div>
@@ -706,37 +708,37 @@ body {
 <div id="override-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
   <div style="background:var(--surface);border-radius:var(--radius);padding:24px;width:290px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
     <div style="font-size:15px;font-weight:700;margin-bottom:6px;" id="modal-date-label"></div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">选择该日排班：</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;" data-i18n="app_override_hint">选择该日排班：</div>
     <div style="display:flex;flex-direction:column;gap:8px;">
-      <button class="export-btn" style="width:100%;" onclick="applyOverride('full')">☀️ 全天</button>
-      <button class="export-btn" style="width:100%;" onclick="applyOverride('half')">🌤 半天</button>
-      <button class="export-btn" style="width:100%;" onclick="applyOverride('off')">💤 休息</button>
-      <button class="export-btn" style="width:100%;background:#f4f0ff;border-color:#9b59b6;color:#6c3483;" onclick="toggleCustomInput()">🕐 自定时间</button>
-      <!-- 自定时间输入框 -->
+      <button class="export-btn" style="width:100%;" onclick="applyOverride('full')" data-i18n="app_override_full">☀️ 全天</button>
+      <button class="export-btn" style="width:100%;" onclick="applyOverride('half')" data-i18n="app_override_half">🌤 半天</button>
+      <button class="export-btn" style="width:100%;" onclick="applyOverride('off')" data-i18n="app_override_off">💤 休息</button>
+      <button class="export-btn" style="width:100%;background:#f4f0ff;border-color:#9b59b6;color:#6c3483;" onclick="toggleCustomInput()" data-i18n="app_override_custom">🕐 自定时间</button>
+      <!-- custom time input -->
       <div id="custom-time-box" style="display:none;background:#f8f4ff;border:1.5px solid #c39bd3;border-radius:8px;padding:12px;margin-top:2px;">
-        <div style="font-size:11px;color:#6c3483;font-weight:600;margin-bottom:8px;">自定义上班时间</div>
+        <div style="font-size:11px;color:#6c3483;font-weight:600;margin-bottom:8px;" data-i18n="app_custom_time_title">自定义上班时间</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <label style="font-size:12px;">开始<br><input type="time" id="custom-start" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
-          <label style="font-size:12px;">结束<br><input type="time" id="custom-end" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
+          <label style="font-size:12px;"><span data-i18n="app_time_start">开始</span><br><input type="time" id="custom-start" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
+          <label style="font-size:12px;"><span data-i18n="app_time_end">结束</span><br><input type="time" id="custom-end" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
         </div>
-        <button onclick="applyCustomOverride()" style="margin-top:10px;width:100%;background:#9b59b6;color:#fff;border:none;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">确认自定时间</button>
+        <button onclick="applyCustomOverride()" style="margin-top:10px;width:100%;background:#9b59b6;color:#fff;border:none;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;" data-i18n="app_custom_time_confirm">确认自定时间</button>
       </div>
-      <button class="export-btn" style="width:100%;color:var(--text-muted);" onclick="applyOverride(null)">↩ 恢复默认</button>
+      <button class="export-btn" style="width:100%;color:var(--text-muted);" onclick="applyOverride(null)" data-i18n="app_override_restore">↩ 恢复默认</button>
     </div>
-    <button onclick="closeModal()" style="margin-top:14px;width:100%;background:none;border:none;font-family:inherit;font-size:13px;color:var(--text-muted);cursor:pointer;">取消</button>
+    <button onclick="closeModal()" style="margin-top:14px;width:100%;background:none;border:none;font-family:inherit;font-size:13px;color:var(--text-muted);cursor:pointer;" data-i18n="cancel">取消</button>
   </div>
 </div>
 
 <!-- Submit Confirm Modal -->
 <div class="modal-overlay" id="submit-modal">
   <div class="modal-box">
-    <div class="modal-title">📋 确认提交班表</div>
-    <div class="modal-body" id="submit-modal-body">
+    <div class="modal-title" data-i18n="app_submit_title">📋 确认提交班表</div>
+    <div class="modal-body" id="submit-modal-body" data-i18n="app_submit_body">
       确认将您的可工作时段提交给管理员吗？提交后管理员将根据此信息安排上班时间。
     </div>
     <div class="modal-actions">
-      <button class="modal-btn cancel" onclick="closeSubmitModal()">取消</button>
-      <button class="modal-btn confirm" id="confirm-submit-btn" onclick="doSubmit()">确认提交</button>
+      <button class="modal-btn cancel" data-i18n="cancel" onclick="closeSubmitModal()">取消</button>
+      <button class="modal-btn confirm" id="confirm-submit-btn" data-i18n="app_submit_confirm_btn" onclick="doSubmit()">确认提交</button>
     </div>
   </div>
 </div>
@@ -827,10 +829,14 @@ function saveState() {
 // ── VIEWS ──
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.topnav-tab').forEach(t => t.classList.remove('active'));
+  // Only clear nav tabs (not lang-switch buttons)
+  ['tab-calendar','tab-roster'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
   document.getElementById('view-' + name).classList.add('active');
-  const tabs = ['calendar','roster'];
-  document.querySelectorAll('.topnav-tab')[tabs.indexOf(name)].classList.add('active');
+  const tabEl = document.getElementById('tab-' + name);
+  if (tabEl) tabEl.classList.add('active');
   if (name === 'calendar') { renderCalendar(); renderInlineSettings(); }
 }
 
@@ -911,9 +917,10 @@ function getSlotForDate(year, month, day) {
 
 function renderCalendar() {
   const y = state.calYear, m = state.calMonth;
-  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-  document.getElementById('cal-month-label').textContent = `${y}年 ${monthNames[m-1]}`;
-  document.getElementById('nav-title').textContent = state.settings.name + '的班表';
+  const monthNames = getLang()==='en' ? t('cal_months') : ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  document.getElementById('cal-month-label').textContent = getLang()==='en' ? `${monthNames[m-1]} ${y}` : `${y}年 ${monthNames[m-1]}`;
+  const name = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (getLang()==='en' ? 'Staff' : '某某');
+  document.getElementById('nav-title').textContent = getLang()==='en' ? `${name}'s Schedule` : `${name}的班表`;
 
   const firstDay = new Date(y, m-1, 1);
   const daysInMonth = new Date(y, m, 0).getDate();
@@ -942,7 +949,7 @@ function renderCalendar() {
     } else if (slot.type === 'custom') {
       slotHTML += `<div class="cal-slot" style="background:#f0e6ff;color:#6c3483;border-radius:3px;font-size:9px;padding:2px 3px;"><span class="cal-slot-dot" style="background:#9b59b6;"></span>${fmtTime(slot.start)}–${fmtTime(slot.end)}</div>`;
     } else {
-      slotHTML += `<div class="cal-slot off">休息</div>`;
+      slotHTML += `<div class="cal-slot off">${t('app_slot_off')}</div>`;
     }
 
     html += `<div class="cal-day ${isWeekend?'weekend':''} ${isToday?'today':''}" onclick="openOverride('${key}',${d})">
@@ -958,7 +965,10 @@ let modalKey = null;
 function openOverride(key, day) {
   modalKey = key;
   const parts = key.split('-');
-  document.getElementById('modal-date-label').textContent = `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+  const dateLabel = getLang()==='en'
+    ? `${t('cal_months')[parseInt(parts[1])-1]} ${parseInt(parts[2])}, ${parts[0]}`
+    : `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+  document.getElementById('modal-date-label').textContent = dateLabel;
   const m = document.getElementById('override-modal');
   m.style.display = 'flex';
 }
@@ -992,8 +1002,8 @@ function applyCustomOverride() {
   if (!modalKey) return;
   const start = document.getElementById('custom-start').value;
   const end   = document.getElementById('custom-end').value;
-  if (!start || !end) { alert('请填写开始和结束时间'); return; }
-  if (start >= end) { alert('结束时间必须晚于开始时间'); return; }
+  if (!start || !end) { alert(getLang()==='en' ? 'Please enter both start and end times.' : '请填写开始和结束时间'); return; }
+  if (start >= end) { alert(getLang()==='en' ? 'End time must be after start time.' : '结束时间必须晚于开始时间'); return; }
   state.overrides[modalKey] = { type: 'custom', start, end };
   saveState();
   closeModal();
@@ -1006,7 +1016,8 @@ let slotModeState = 'full';
 function onNameInput(val) {
   state.settings.name = val.trim() || '某某';
   saveState();
-  document.getElementById('nav-title').textContent = state.settings.name + '的班表';
+  const _n = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (getLang()==='en' ? 'Staff' : '某某');
+  document.getElementById('nav-title').textContent = getLang()==='en' ? `${_n}'s Schedule` : `${_n}的班表`;
 }
 
 function setSlotMode(mode) {
@@ -1049,13 +1060,15 @@ function renderInlineSettings() {
 
   const grid = document.getElementById('rule-day-grid');
   grid.innerHTML = '';
-  DAY_NAMES_ZH.forEach((name, i) => {
+  const _dayNames = getLang()==='en' ? DAY_NAMES_EN : DAY_NAMES_ZH;
+  const _slotLabels = getLang()==='en' ? {half:'Half',full:'Full',off:'Off'} : {half:'半天',full:'全天',off:'休'};
+  _dayNames.forEach((dayName, i) => {
     const rule = state.settings.dayRules[i];
     let cls = '';
     if (rule === 'full') cls = 'selected-full';
     else if (rule === 'half') cls = 'selected-half';
-    const slotLabel = rule ? ({'half':'半天','full':'全天','off':'休'}[rule] || rule) : '—';
-    grid.innerHTML += `<button class="rule-day-btn ${cls}" onclick="toggleRuleDay(${i})" title="周${name}">${['一','二','三','四','五','六','日'][i]}<br><span style="font-size:9px;">${slotLabel}</span></button>`;
+    const slotLabel = rule ? (_slotLabels[rule] || rule) : '—';
+    grid.innerHTML += `<button class="rule-day-btn ${cls}" onclick="toggleRuleDay(${i})" title="${dayName}">${dayName}<br><span style="font-size:9px;">${slotLabel}</span></button>`;
   });
 
   setSlotMode(slotModeState);
@@ -1082,29 +1095,31 @@ function clearAllRules() {
 
 function updateRulePreview() {
   const rules = state.settings.dayRules;
-  const dayNames = ['周一','周二','周三','周四','周五','周六','周日'];
-  const slotLabel = {full:'全天', half:'半天', off:'休息'};
-  let set = rules.map((r,i) => r ? `${dayNames[i]}${slotLabel[r] || r}` : null).filter(Boolean);
+  const isEn = getLang() === 'en';
+  const dayNames = isEn ? DAY_NAMES_EN : ['周一','周二','周三','周四','周五','周六','周日'];
+  const slotLabel = isEn ? {full:'Full Day', half:'Half Day', off:'Off'} : {full:'全天', half:'半天', off:'休息'};
+  let set = rules.map((r,i) => r ? `${dayNames[i]} ${slotLabel[r] || r}` : null).filter(Boolean);
   if (set.length === 0) {
-    document.getElementById('rule-preview').textContent = '（尚未设置任何规则，所有日期默认休息）';
+    document.getElementById('rule-preview').textContent = isEn ? '(No rules set — all dates default to Off)' : '（尚未设置任何规则，所有日期默认休息）';
     return;
   }
-  document.getElementById('rule-preview').textContent = `默认：${set.join('、')} 工作`;
+  document.getElementById('rule-preview').textContent = isEn ? `Default working: ${set.join(', ')}` : `默认：${set.join('、')} 工作`;
 }
 
 // legacy alias (keeped for any remaining call sites)
 function saveSettings() {
   state.settings.name = document.getElementById('s-name').value.trim() || '某某';
-  state.settings.logic = 'include'; // 固定为选择工作时段
+  state.settings.logic = 'include';
   saveState();
-  document.getElementById('nav-title').textContent = state.settings.name + '的班表';
+  const _sn = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (getLang()==='en' ? 'Staff' : '某某');
+  document.getElementById('nav-title').textContent = getLang()==='en' ? `${_sn}'s Schedule` : `${_sn}的班表`;
 }
 
 // ── ROSTER ──
 function generateRoster() {
   const { y: ny, m: nm } = getNextMonth();
   if (state.calYear !== ny || state.calMonth !== nm) {
-    alert('只能提交下个月的班表。');
+    alert(getLang()==='en' ? 'You can only submit availability for next month.' : '只能提交下个月的班表。');
     return;
   }
   state.rosterMonth = { year: state.calYear, month: state.calMonth };
@@ -1130,11 +1145,14 @@ function renderRoster() {
     state.rosterMonth = { year: state.calYear, month: state.calMonth };
   }
   const { year: y, month: m } = state.rosterMonth;
-  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  const monthNames = getLang()==='en' ? t('cal_months') : ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
   const color = state.rosterColor;
   const fillClass = `filled-${color}`;
+  const _rn = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (getLang()==='en' ? 'Staff' : '某某');
 
-  document.getElementById('roster-title-label').textContent = `${y}年${monthNames[m-1]} · ${state.settings.name}的可工作时段`;
+  document.getElementById('roster-title-label').textContent = getLang()==='en'
+    ? `${_rn} · ${monthNames[m-1]} ${y} · Availability`
+    : `${y}年${monthNames[m-1]} · ${_rn}的可工作时段`;
 
   const firstDay = new Date(y, m-1, 1);
   const daysInMonth = new Date(y, m, 0).getDate();
@@ -1151,16 +1169,19 @@ function renderRoster() {
     }
   }
 
+  const _rosterBarTitle = getLang()==='en'
+    ? `${_rn} · ${monthNames[m-1]} ${y} · Availability`
+    : `${_rn} · ${y}年${monthNames[m-1]} · 可工作时段`;
   let html = `<div class="roster-wrap" id="roster-printable">
-    <div class="roster-name-bar">${state.settings.name} · ${y}年${monthNames[m-1]} · 可工作时段</div>`;
+    <div class="roster-name-bar">${_rosterBarTitle}</div>`;
 
   weeks.forEach(week => {
     html += `<div class="roster-week">
       <div class="roster-week-head">
         <div class="roster-wh-cell" style="position:relative;overflow:hidden;font-size:9px;">
           <svg style="position:absolute;top:0;left:0;width:100%;height:100%;"><line x1="0" y1="0" x2="100%" y2="100%" stroke="#b0a89e" stroke-width="1"/></svg>
-          <span style="position:absolute;top:3px;right:4px;font-size:8px;color:#999;">日期</span>
-          <span style="position:absolute;bottom:3px;left:4px;font-size:8px;color:#999;">姓名</span>
+          <span style="position:absolute;top:3px;right:4px;font-size:8px;color:#999;">${getLang()==='en'?'Date':'日期'}</span>
+          <span style="position:absolute;bottom:3px;left:4px;font-size:8px;color:#999;">${getLang()==='en'?'Name':'姓名'}</span>
         </div>`;
     week.forEach((d, i) => {
       const engDay = DAY_NAMES_EN[i];
@@ -1170,7 +1191,7 @@ function renderRoster() {
     html += `</div>`;
 
     html += `<div class="roster-slot-row am-row">
-      <div class="roster-label-cell">可工作时段</div>`;
+      <div class="roster-label-cell">${getLang()==='en'?'Availability':'可工作时段'}</div>`;
     week.forEach(d => {
       const slot = d ? getSlotForDate(y, m, d) : null;
       const isOff = !slot || slot.type === 'off';
@@ -1218,19 +1239,20 @@ function buildSchedulePayload() {
 
 function openSubmitConfirm() {
   if (!state.rosterMonth) {
-    alert('请先生成班表再提交。');
+    alert(getLang()==='en' ? 'Please generate your availability first.' : '请先生成班表再提交。');
     return;
   }
   if (!state.settings.name || state.settings.name === '某某') {
-    alert('请先在日历页左上角填写名称，再提交班表。');
+    alert(getLang()==='en' ? 'Please enter your name in the Calendar tab before submitting.' : '请先在日历页左上角填写名称，再提交班表。');
     showView('calendar');
     document.getElementById('s-name').focus();
     return;
   }
   const { year: y, month: m } = state.rosterMonth;
-  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-  document.getElementById('submit-modal-body').textContent =
-    `确认将 ${state.settings.name} 的 ${y}年${monthNames[m-1]} 可工作时段提交给管理员吗？提交后管理员将根据此信息安排上班时间。`;
+  const monthNames = getLang()==='en' ? t('cal_months') : ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  document.getElementById('submit-modal-body').textContent = getLang()==='en'
+    ? `Submit ${state.settings.name}'s availability for ${monthNames[m-1]} ${y} to the manager? They will use this to arrange your schedule.`
+    : `确认将 ${state.settings.name} 的 ${y}年${monthNames[m-1]} 可工作时段提交给管理员吗？提交后管理员将根据此信息安排上班时间。`;
   document.getElementById('submit-modal').classList.add('open');
   document.getElementById('confirm-submit-btn').disabled = false;
 }
@@ -1245,7 +1267,7 @@ async function doSubmit() {
 
   const btn = document.getElementById('confirm-submit-btn');
   btn.disabled = true;
-  btn.textContent = '提交中…';
+  btn.textContent = getLang()==='en' ? 'Submitting…' : '提交中…';
 
   const statusEl = document.getElementById('submit-status');
 
@@ -1253,31 +1275,30 @@ async function doSubmit() {
   if (BACKEND_MODE === 'gas' && (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('YOUR_APPS_SCRIPT'))) {
     closeSubmitModal();
     statusEl.className = 'submit-status error';
-    statusEl.textContent = '⚠️ 尚未配置 Google Sheets 连接。请联系管理员设置后端接口。';
+    statusEl.textContent = getLang()==='en' ? '⚠️ Backend not configured. Please contact your manager.' : '⚠️ 尚未配置 Google Sheets 连接。请联系管理员设置后端接口。';
     btn.disabled = false;
-    btn.textContent = '确认提交';
+    btn.textContent = t('app_submit_confirm_btn');
     return;
   }
 
   try {
     statusEl.className = 'submit-status loading';
-    statusEl.textContent = '⏳ 正在提交，请稍候…';
+    statusEl.textContent = getLang()==='en' ? '⏳ Submitting, please wait…' : '⏳ 正在提交，请稍候…';
 
     const result = await Backend.postSchedule(payload);
 
     closeSubmitModal();
     if (result && result.success === false) {
       statusEl.className = 'submit-status error';
-      statusEl.textContent = '❌ 提交失败：' + (result.error || '未知错误');
+      statusEl.textContent = getLang()==='en' ? '❌ Submission failed: ' + (result.error || 'Unknown error') : '❌ 提交失败：' + (result.error || '未知错误');
       btn.disabled = false;
-      btn.textContent = '确认提交';
+      btn.textContent = t('app_submit_confirm_btn');
       return;
     }
     statusEl.className = 'submit-status success';
-    statusEl.textContent = '✅ 班表已成功提交！管理员将在排班时参考您的可工作时段。';
+    statusEl.textContent = getLang()==='en' ? '✅ Availability submitted! Your manager will use this to arrange your schedule.' : '✅ 班表已成功提交！管理员将在排班时参考您的可工作时段。';
     document.getElementById('submit-btn').disabled = true;
 
-    // Save submission record locally
     localStorage.setItem('last_submit_' + payload.year + '_' + payload.month, JSON.stringify({
       name: payload.name,
       submittedAt: payload.submittedAt
@@ -1286,9 +1307,9 @@ async function doSubmit() {
   } catch(err) {
     closeSubmitModal();
     statusEl.className = 'submit-status error';
-    statusEl.textContent = '❌ 提交失败，请检查网络连接后重试。';
+    statusEl.textContent = getLang()==='en' ? '❌ Submission failed. Please check your connection and try again.' : '❌ 提交失败，请检查网络连接后重试。';
     btn.disabled = false;
-    btn.textContent = '确认提交';
+    btn.textContent = t('app_submit_confirm_btn');
   }
 }
 
@@ -1296,7 +1317,8 @@ async function doSubmit() {
 function buildRosterSVG() {
   if (!state.rosterMonth) return null;
   const { year: y, month: m } = state.rosterMonth;
-  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  const isEnSvg = getLang() === 'en';
+  const monthNames = isEnSvg ? t('cal_months') : ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
   const DAY_EN = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const MON_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -1327,7 +1349,11 @@ function buildRosterSVG() {
 
   svg += `<rect width="${W}" height="${H}" fill="#f0f2f6"/>`;
   svg += `<rect x="0" y="0" width="${W}" height="${TITLE_H}" fill="${headerBg}"/>`;
-  svg += `<text x="${W/2}" y="${TITLE_H*0.68}" text-anchor="middle" fill="${headerText}" font-size="14" font-weight="bold">${state.settings.name} · ${y}年${monthNames[m-1]} · 可工作时段</text>`;
+  const _svgName = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (isEnSvg ? 'Staff' : '某某');
+  const _svgTitle = isEnSvg
+    ? `${_svgName} · ${monthNames[m-1]} ${y} · Availability`
+    : `${_svgName} · ${y}年${monthNames[m-1]} · 可工作时段`;
+  svg += `<text x="${W/2}" y="${TITLE_H*0.68}" text-anchor="middle" fill="${headerText}" font-size="14" font-weight="bold">${_svgTitle}</text>`;
 
   const tableY = TITLE_H;
   svg += `<rect x="0" y="${tableY}" width="${W}" height="${H - TITLE_H}" fill="none" stroke="${borderColor}" stroke-width="2"/>`;
@@ -1339,8 +1365,8 @@ function buildRosterSVG() {
     svg += `<rect x="0" y="${wy}" width="${W}" height="${HEAD_H}" fill="${headBg}"/>`;
     // 对角线
     svg += `<line x1="0" y1="${wy}" x2="${LABEL_W}" y2="${wy+HEAD_H}" stroke="#8090b0" stroke-width="1"/>`;
-    svg += `<text x="${LABEL_W-4}" y="${wy+11}" text-anchor="end" fill="#6070a0" font-size="8">日期</text>`;
-    svg += `<text x="4" y="${wy+HEAD_H-5}" fill="#6070a0" font-size="8">姓名</text>`;
+    svg += `<text x="${LABEL_W-4}" y="${wy+11}" text-anchor="end" fill="#6070a0" font-size="8">${isEnSvg?'Date':'日期'}</text>`;
+    svg += `<text x="4" y="${wy+HEAD_H-5}" fill="#6070a0" font-size="8">${isEnSvg?'Name':'姓名'}</text>`;
     week.forEach((d, i) => {
       const cx = LABEL_W + i * COL_W;
       const dateStr = d ? `${d}-${MON_EN[m-1]}-${String(y).slice(2)}` : '';
@@ -1356,7 +1382,7 @@ function buildRosterSVG() {
     // ── 时段行（单行）──
     const rowY = wy + HEAD_H;
     svg += `<rect x="0" y="${rowY}" width="${LABEL_W}" height="${ROW_H}" fill="${headBg}"/>`;
-    svg += `<text x="${LABEL_W/2}" y="${rowY + ROW_H*0.62}" text-anchor="middle" fill="#2d3f55" font-size="9" font-weight="bold">时段</text>`;
+    svg += `<text x="${LABEL_W/2}" y="${rowY + ROW_H*0.62}" text-anchor="middle" fill="#2d3f55" font-size="9" font-weight="bold">${isEnSvg?'Avail.':'时段'}</text>`;
 
     week.forEach((d, i) => {
       const cx = LABEL_W + i * COL_W;
@@ -1416,18 +1442,23 @@ function exportPNG() {
   const result = buildRosterSVG();
   if (!result) return;
   const { svg, W, H } = result;
-  const fname = `班表_${state.settings.name}_${state.rosterMonth.year}${String(state.rosterMonth.month).padStart(2,'0')}.png`;
+  const _expName = state.settings.name && state.settings.name !== '某某' ? state.settings.name : 'schedule';
+  const fname = getLang()==='en'
+    ? `Schedule_${_expName}_${state.rosterMonth.year}${String(state.rosterMonth.month).padStart(2,'0')}.png`
+    : `班表_${_expName}_${state.rosterMonth.year}${String(state.rosterMonth.month).padStart(2,'0')}.png`;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   if (isIOS) {
     const win = window.open('', '_blank');
-    if (!win) { alert('请在 Safari 设置中允许弹出式窗口'); return; }
-    win.document.write('<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;}p{color:#ccc;font-size:13px;font-family:sans-serif;padding:14px;text-align:center;}</style></head><body><p>生成中…</p></body></html>');
+    if (!win) { alert(getLang()==='en' ? 'Please allow pop-ups in Safari settings.' : '请在 Safari 设置中允许弹出式窗口'); return; }
+    const genMsg = getLang()==='en' ? 'Generating…' : '生成中…';
+    win.document.write(`<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;}p{color:#ccc;font-size:13px;font-family:sans-serif;padding:14px;text-align:center;}</style></head><body><p>${genMsg}</p></body></html>`);
     win.document.close();
     renderSVGToCanvas(svg, W, H, 2).then(canvas => {
       const dataURL = canvas.toDataURL('image/png');
-      win.document.body.innerHTML = `<img src="${dataURL}"><p>长按图片 → 存储到照片</p>`;
-    }).catch(() => { win.close(); alert('导出失败，请重试'); });
+      const saveMsg = getLang()==='en' ? 'Long-press the image → Save to Photos' : '长按图片 → 存储到照片';
+      win.document.body.innerHTML = `<img src="${dataURL}"><p>${saveMsg}</p>`;
+    }).catch(() => { win.close(); alert(getLang()==='en' ? 'Export failed, please try again.' : '导出失败，请重试'); });
   } else {
     renderSVGToCanvas(svg, W, H, 2).then(canvas => {
       const a = document.createElement('a');
@@ -1444,18 +1475,20 @@ function exportPDF() {
   const { svg, W, H } = result;
 
   const win = window.open('', '_blank');
-  if (!win) { alert('请在 Safari 设置中允许弹出式窗口'); return; }
-  win.document.write('<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#fff;}p{font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;}</style></head><body><p>生成中…</p></body></html>');
+  if (!win) { alert(getLang()==='en' ? 'Please allow pop-ups in Safari settings.' : '请在 Safari 设置中允许弹出式窗口'); return; }
+  const genMsg2 = getLang()==='en' ? 'Generating…' : '生成中…';
+  win.document.write(`<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#fff;}p{font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;}</style></head><body><p>${genMsg2}</p></body></html>`);
   win.document.close();
 
   renderSVGToCanvas(svg, W, H, 2).then(canvas => {
     const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pdfHint = getLang()==='en'
+      ? 'Tap the Share button → Print → swipe up on the preview → Share → <b>Save as PDF</b>'
+      : '点右上角 <b>分享</b> → <b>打印</b> → 左下角预览图向上划 → 分享 → <b>存储为PDF</b>';
     win.document.body.innerHTML = `
-      <div style="font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;">
-        点右上角 <b>分享</b> → <b>打印</b> → 左下角预览图向上划 → 分享 → <b>存储为PDF</b>
-      </div>
+      <div style="font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;">${pdfHint}</div>
       <img src="${imgData}" style="width:100%;display:block;">`;
-  }).catch(() => { win.close(); alert('导出失败，请重试'); });
+  }).catch(() => { win.close(); alert(getLang()==='en' ? 'Export failed, please try again.' : '导出失败，请重试'); });
 }
 
 // ── THEMES ──
@@ -1486,9 +1519,24 @@ function applyTheme(name) {
   saveState();
 }
 
+// ── LANG CHANGE HOOK ──
+function onLangChanged(lang) {
+  applyI18n();
+  renderCalendar();
+  renderInlineSettings();
+  updateRulePreview();
+  if (state.rosterMonth) renderRoster();
+}
+
 // ── INIT ──
 loadState();
 initCalendar();
+// Add lang switcher to nav
+(function() {
+  const navSw = document.getElementById('app-nav-lang-switch');
+  if (navSw) navSw.innerHTML = langSwitchHTML();
+})();
+applyI18n();
 renderCalendar();
 renderInlineSettings();
 setSlotMode('full');
