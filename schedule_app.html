@@ -826,7 +826,7 @@ body {
 const Backend = {
   _get(params) {
     const base = BACKEND_MODE === 'local' ? LOCAL_API_URL : APPS_SCRIPT_URL;
-    return fetch(base + '?' + new URLSearchParams(params).toString()).then(r => r.json());
+    return fetch(base + '?' + new URLSearchParams({ ...params, _t: Date.now() }).toString()).then(r => r.json());
   },
   _post(body) {
     if (BACKEND_MODE === 'local') {

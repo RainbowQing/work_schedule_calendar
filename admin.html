@@ -659,7 +659,7 @@ const Backend = {
     // 注意：不再 catch 静默成功，让调用方（persistData/manualSave）感知真实失败
   },
   _localGet(params) {
-    return fetch(LOCAL_API_URL + '?' + new URLSearchParams(params).toString()).then(r => r.json());
+    return fetch(LOCAL_API_URL + '?' + new URLSearchParams({ ...params, _t: Date.now() }).toString()).then(r => r.json());
   },
   _localPost(body) {
     return fetch(LOCAL_API_URL, {
@@ -1314,7 +1314,12 @@ async function fetchAndCacheSubs(year, month, silent) {
         }
       });
       appState.submissions[`${year}||${month}`] = data.submissions;
-      data.submissions.forEach(s => { appState.allEmployees[s.name] = true; });
+      // 只把未离职的员工加入 allEmployees（已彻底删除的员工服务器上已无记录，不会出现在这里）
+      data.submissions.forEach(s => {
+        if (!appState.resignedEmployees[s.name]) {
+          appState.allEmployees[s.name] = true;
+        }
+      });
       persistData();
     }
   } catch(e) { if (!silent) alert(getLang()==='en' ? 'Failed to load data: ' + e.message : '加载数据失败：' + e.message); }
@@ -1868,8 +1873,15 @@ function getEmployeeScheduleSummary(name) {
   return items;
 }
 
-// 执行删除员工（已确认，含排班清除）
+// 执行删除员工（已确认，含排班清除）——先删服务器数据，再清内存
 async function _doDeleteEmployee(name, isPermanent) {
+  // 1. 先删服务器上的提交记录和账号（await，确保删干净再继续）
+  try { await Backend.deleteEmployeeSubmissions(name); } catch(e) {
+    console.warn('后端提交记录删除失败:', e);
+  }
+  Backend.deleteEmpAccount(name).catch(e => console.warn('后端删除账号失败:', e));
+
+  // 2. 清除内存中所有该员工的数据
   for (const data of Object.values(scheduleCache)) {
     for (const slotKey of Object.keys(data.days)) {
       data.days[slotKey] = data.days[slotKey].filter(n => n !== name);
@@ -1883,14 +1895,12 @@ async function _doDeleteEmployee(name, isPermanent) {
   delete appState.resignedEmployees[name];
   delete appState.permanentlyDeleted[name];
   delete appState.employeeAccounts[name];
-  Backend.deleteEmpAccount(name).catch(e => console.warn('后端删除账号失败:', e));
+
+  // 3. 持久化并刷新界面
   persistData();
   renderLocationTab();
   renderScheduleGrid();
   renderEmpMgmt();
-  try { await Backend.deleteEmployeeSubmissions(name); } catch(e) {
-    console.warn('后端提交记录删除失败（不影响本地操作）:', e);
-  }
   showMsg(isPermanent ? t('emp_perm_deleted', { name }) : t('emp_deleted', { name }));
 }
 
