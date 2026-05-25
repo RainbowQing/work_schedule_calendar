@@ -181,7 +181,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 .sched-tbl tbody td.dc.p2 { background: #10b981 !important; color: #fff; cursor: pointer; }
 .sched-tbl tbody td.dc.p2:hover { background: #0d9e6e !important; }
 .sched-tbl tbody td.dc.today { outline: 2px solid #f59e0b; outline-offset: -2px; }
-.sched-tbl tbody td.dc.confirmed-cell { opacity: 0.75; cursor: not-allowed !important; }
+.sched-tbl tbody td.dc.confirmed-cell { opacity: 0.7; cursor: not-allowed !important; }
 .week-block .week-block-title { min-height: 32px; }
 /* drag handle */
 .drag-handle { display: inline-block; cursor: grab; color: #8aabcc; font-size: 14px; margin-right: 4px; user-select: none; vertical-align: middle; }
@@ -414,7 +414,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
       <span><span class="legend-box" style="background:#fff3e0;border:1px solid #fb923c;"></span> <span data-i18n="sched_legend_elsewhere">已在他处排班</span></span>
       <span><span class="legend-box" style="background:#1c4f80;"></span> <span data-i18n="sched_legend_p1">已排班（第1人）</span></span>
       <span><span class="legend-box" style="background:#10b981;"></span> <span data-i18n="sched_legend_p2">已排班（第2人）</span></span>
-      <span><span class="legend-box" style="background:#ffd700;border:1px solid #b8960a;"></span> <span data-i18n="sched_legend_confirmed">已确认排班</span></span>
+      <span><span class="legend-box" style="background:#4a5568;border:1px solid #2d3748;"></span> <span data-i18n="sched_legend_confirmed">已确认排班</span></span>
       <span style="position:relative;display:inline-flex;align-items:center;gap:4px;">
         <span class="legend-box" style="background:#eef6ff;border:1px solid #93c5fd;position:relative;">
           <span style="position:absolute;top:0;right:1px;font-size:8px;font-weight:700;color:#d97706;line-height:1;">!</span>
@@ -1982,7 +1982,7 @@ function onCellClick(loc, year, month, dateKey, name, weekIdx, slot) {
   } else {
     // 双击：打开修改时间 modal，只改点击的那一格（start 或 end）
     _cellClickCount = 0;
-    openEditTimeModal(loc, year, month, dateKey, name, slot);
+    openEditTimeModal(loc, year, month, dateKey, name, slot, weekIdx);
   }
 }
 
@@ -2045,7 +2045,7 @@ function timeToMinsAdm(t) {
 // ── 管理员修改排班时间 ──
 let _editTimeCtx = null; // { loc, year, month, dateKey, name, schedKey }
 
-function openEditTimeModal(loc, year, month, dateKey, name, slot) {
+function openEditTimeModal(loc, year, month, dateKey, name, slot, weekIdx) {
   if (_batchTimeMode) return; // batch time edit mode takes over
   // slot: 'start' | 'end' — 点击哪格只改那格；不传则两格都显示（兼容旧调用）
   const schedData = getSchedData(loc, year, month);
@@ -2075,7 +2075,7 @@ function openEditTimeModal(loc, year, month, dateKey, name, slot) {
   document.getElementById('edit-time-start').value = fmtTime(to.start || empOrigStart || '') || (to.start || empOrigStart || '');
   document.getElementById('edit-time-end').value   = fmtTime(to.end   || empOrigEnd   || '') || (to.end   || empOrigEnd   || '');
   document.getElementById('edit-time-error').textContent = '';
-  _editTimeCtx = { loc, year, month, dateKey, name, slot };
+  _editTimeCtx = { loc, year, month, dateKey, name, slot, weekIdx: weekIdx !== undefined ? weekIdx : -1 };
   document.getElementById('edit-time-modal').classList.add('open');
   // 自动聚焦对应输入框
   setTimeout(() => {
@@ -2165,7 +2165,7 @@ function applyEditTime() {
     }
   }
 
-  _pushTimeUndo(loc, year, month); // 保存前快照，支持撤销
+  _pushTimeUndo(loc, year, month, _editTimeCtx.weekIdx); // 保存前快照，支持撤销
   if (!schedData.timeOverrides) schedData.timeOverrides = {};
   const toKey = `${dateKey}||${name}`;
   const prev = schedData.timeOverrides[toKey] || {};
@@ -2180,12 +2180,13 @@ function applyEditTime() {
 // ── 时间编辑撤销栈（按 loc||year||month||weekIdx 隔离） ──
 let _timeUndoStack = []; // 每项: { loc, year, month, weekIdx, overrides }
 
-function _pushTimeUndo(loc, year, month) {
+function _pushTimeUndo(loc, year, month, weekIdxOverride) {
   const schedData = getSchedData(loc, year, month);
   const snapshot = JSON.parse(JSON.stringify(schedData.timeOverrides || {}));
-  const weekIdx = _btCtx ? _btCtx.weekIdx : -1;
+  // 优先使用调用方传入的 weekIdx（单击修改场景），其次用 batch 模式的 _btCtx
+  const weekIdx = (weekIdxOverride !== undefined && weekIdxOverride !== null) ? weekIdxOverride
+                : (_btCtx ? _btCtx.weekIdx : -1);
   _timeUndoStack.push({ loc, year, month, weekIdx, overrides: snapshot });
-  // 最多保留 999 步（不限上限）
   _updateWeekUndoBtn(loc, year, month, weekIdx);
 }
 
@@ -2238,6 +2239,10 @@ let _btAllTargets = []; // full target list for highlight (updated by daytype ch
 // 进入某周的编辑时间模式（或在已激活时：有选人→打开面板；无选人→退出）
 function enterWeekEditTimeMode(loc, year, month, weekIdx, wkDateKeys) {
   // wkDateKeys 是 JS 数组（含 null 占位），直接使用
+  if (isWeekConfirmed(loc, year, month, weekIdx)) {
+    alert(t('sched_week_confirmed_lock'));
+    return;
+  }
   // 如果已在该周模式
   if (_batchTimeMode && _btCtx && _btCtx.weekIdx === weekIdx) {
     if (_btModeAorB === 'name' && _btSelectedNames.size > 0) {
@@ -2876,12 +2881,12 @@ function renderScheduleGrid() {
     const wkDateKeysJson = JSON.stringify(wkDateKeys);
     const safeKeysAttr = wkDateKeysJson.replace(/"/g, '&quot;');
 
-    // Week block: gold border if confirmed
-    const blockStyle = confirmed ? 'border-color:#b8960a;' : '';
+    // Week block: muted grey styling when confirmed
+    const blockStyle = confirmed ? 'border-color:#718096;filter:grayscale(35%) opacity(0.9);' : '';
     outerHtml += `<div class="week-block" style="${blockStyle}">`;
 
     // Title bar with action buttons on the right
-    const titleBg = confirmed ? 'background:#a07800;' : '';
+    const titleBg = confirmed ? 'background:#4a5568;' : '';
     const confirmBtnHtml = confirmed
       ? `<button onclick="unconfirmWeek('${loc}',${year},${month},${wi})" style="background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;" title="${t('sched_confirmed_unlock_hint')}">🔓 ${t('sched_confirmed_label')}</button>`
       : `<button onclick="confirmWeek('${loc}',${year},${month},${wi})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;">✅ ${t('sched_confirm_week_label')}</button>`;
@@ -2896,7 +2901,9 @@ function renderScheduleGrid() {
     const safeLocAttr = loc.replace(/'/g, "\\'");
     const undoCount = _timeUndoStack.filter(s => s.weekIdx === wi).length;
     const undoDisabled = undoCount === 0;
-    const editTimeBtnHtml = `<button id="edit-time-week-btn-${wi}" onclick="enterWeekEditTimeMode('${safeLocAttr}',${year},${month},${wi},${safeKeysAttr})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;" title="${t('sched_edit_time_hint')}">⏱️ ${t('sched_edit_time_label')}</button>`;
+    const editTimeBtnHtml = confirmed
+      ? `<button disabled style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.35);border-radius:5px;padding:3px 10px;font-size:11px;cursor:not-allowed;font-family:inherit;" title="${t('sched_week_confirmed_lock')}">⏱️ ${t('sched_edit_time_label')}</button>`
+      : `<button id="edit-time-week-btn-${wi}" onclick="enterWeekEditTimeMode('${safeLocAttr}',${year},${month},${wi},${safeKeysAttr})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;" title="${t('sched_edit_time_hint')}">⏱️ ${t('sched_edit_time_label')}</button>`;
     const undoBtnHtml = `<button id="undo-week-btn-${wi}" onclick="undoTimeEdit('${safeLocAttr}',${year},${month},${wi})" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;opacity:${undoDisabled?'0.35':'1'};${undoDisabled?'pointer-events:none;':''}" title="${undoDisabled ? t('sched_undo_empty') : t('sched_undo_hint',{count:undoCount})}">↩${undoCount>0?' ('+undoCount+')':''}</button>`;
 
     outerHtml += `<div class="week-block-title" style="display:flex;align-items:center;justify-content:space-between;${titleBg}">
@@ -3020,9 +3027,8 @@ function renderScheduleGrid() {
                   endCls   += colorCls + ' confirmed-cell';
                   startInner = empStart || '✓';
                   endInner   = empEnd   || '✓';
-                  // confirmed 状态：点击直接打开编辑（不切换），start/end 分别只改对应字段
-                  startHandler = dblOnlyStartJS;
-                  endHandler   = dblOnlyEndJS;
+                  // confirmed 状态：已锁定，不允许任何点击操作
+                  // startHandler / endHandler 保持空字符串
                 } else if (elsewhere) {
                   startCls += ' conflict'; startInner = '⊗';
                   endCls   += ' conflict'; endInner   = '⊗';
@@ -3080,24 +3086,26 @@ function renderScheduleGrid() {
               if (isToday && !isPast && !confirmed) { startCls += ' today'; endCls += ' today'; }
 
               const isEn = getLang() === 'en';
-              const titleStart = !hasSubmitted && !isChecked
-                ? (isEn ? `${name} has not submitted` : `${name} 尚未提交班表`)
-                : confirmed
-                  ? (isEn ? `${name} ${dateKey} start (click to edit time)` : `${name} ${dateKey} 起始（点击修改时间）`)
-                  : elsewhere
-                    ? (isEn ? `${name} is already scheduled at ${elsewhereLoc} that day` : `${name} 当天已在「${elsewhereLoc}」排班`)
-                    : isChecked
-                      ? (isEn ? `${name} start ${empStart||'—'} (click to deselect; dbl-click to edit)` : `${name} 起始 ${empStart||'未填'}（单击取消；双击改时间）`)
-                      : (isEn ? `${name} ${dateKey} start: ${empStart||'—'}` : `${name} ${dateKey} 起始：${empStart||'未填'}`);
-              const titleEnd = !hasSubmitted && !isChecked
-                ? (isEn ? `${name} has not submitted` : `${name} 尚未提交班表`)
-                : confirmed
-                  ? (isEn ? `${name} ${dateKey} end (click to edit time)` : `${name} ${dateKey} 结束（点击修改时间）`)
-                  : elsewhere
-                    ? (isEn ? `${name} is already scheduled at ${elsewhereLoc} that day` : `${name} 当天已在「${elsewhereLoc}」排班`)
-                    : isChecked
-                      ? (isEn ? `${name} end ${empEnd||'—'} (click to deselect; dbl-click to edit)` : `${name} 结束 ${empEnd||'未填'}（单击取消；双击改时间）`)
-                      : (isEn ? `${name} ${dateKey} end: ${empEnd||'—'}` : `${name} ${dateKey} 结束：${empEnd||'未填'}`);
+              // tooltip 优先级：未提交 > 他处排班 > 休息 > 已排班(confirmed/未confirmed) > 可用未排班
+              function _tip(slot) {
+                const raw = slot === 'start' ? empStart : empEnd;
+                if (!hasSubmitted && !isChecked)
+                  return isEn ? `${name}: not submitted` : `${name}：尚未提交班表`;
+                if (elsewhere)
+                  return isEn ? `${name}: already scheduled at ${elsewhereLoc} that day` : `${name}：当天已在「${elsewhereLoc}」排班`;
+                if (!empAvail && hasSubmitted)
+                  return isEn ? `${name}: not available that day (rest day)` : `${name}：当天不可工作（休息）`;
+                if (isChecked)
+                  return confirmed
+                    ? (isEn ? `${name} ${slot} ${raw||'—'} · week confirmed (locked)` : `${name} ${slot==='start'?'起始':'结束'} ${raw||'未填'} · 班次已确认（锁定）`)
+                    : (isEn ? `${name} ${slot} ${raw||'—'} · click to deselect; dbl-click to edit` : `${name} ${slot==='start'?'起始':'结束'} ${raw||'未填'}（单击取消；双击改时间）`);
+                // 可用但未排班
+                return isEn
+                  ? `${name}: submitted ${slot==='start'?'start':'end'} ${raw||'—'}`
+                  : `${name}：员工提交${slot==='start'?'开始':'结束'}时间 ${raw||'未填'}`;
+              }
+              const titleStart = _tip('start');
+              const titleEnd   = _tip('end');
 
               // 时间改动标注
               if (startTimeWarn) { startCls += ' time-override-warn'; }
@@ -3224,7 +3232,6 @@ function openSettingsModal() {
   document.getElementById('settings-loc-times-list').innerHTML = locTimesHtml;
 
   // Confirmed weeks section
-  const curLoc = document.getElementById('sched-location') && document.getElementById('sched-location').value;
   // 只显示当前地点的已确认班次
   const confirmedEntries = Object.keys(appState.confirmedWeeks).filter(k => {
     if (!appState.confirmedWeeks[k]) return false;
@@ -3243,9 +3250,10 @@ function openSettingsModal() {
       const cmonth = parts[parts.length - 2];
       const cyear  = parts[parts.length - 3];
       const months = t('cal_months');
+      const cloc2 = parts.slice(0, parts.length - 3).join('||');
       const label = getLang()==='en'
-        ? `${months[parseInt(cmonth)-1]} ${cyear} — Week ${parseInt(cwi)+1}`
-        : `${cyear}年${cmonth}月 第${parseInt(cwi)+1}周`;
+        ? `${cloc2} · ${months[parseInt(cmonth)-1]} ${cyear} — Week ${parseInt(cwi)+1}`
+        : `${cloc2} · ${cyear}年${cmonth}月 第${parseInt(cwi)+1}周`;
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee;">
         <span style="font-size:13px;">🔒 ${label}</span>
         <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 10px;"
@@ -3716,7 +3724,7 @@ function showLoading(show) {
   document.getElementById('loading').className = show?'loading-overlay open':'loading-overlay';
 }
 
-// ── Page load: init language UI ──
+/// ── Page load: init language UI ──
 (function() {
   initLangSwitchers();
   populateMonthSelects();

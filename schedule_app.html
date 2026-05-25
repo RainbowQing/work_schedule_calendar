@@ -598,83 +598,154 @@ body {
   .rule-day-grid { grid-template-columns: repeat(4,1fr); }
 }
 </style>
+<style>
+/* ── EMPLOYEE LOGIN ── */
+#emp-login-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #1c4f80 0%, #2d7abf 100%);
+}
+.emp-login-box {
+  background: #fff; border-radius: 16px; padding: 40px 36px;
+  width: 340px; max-width: 94vw; box-shadow: 0 16px 48px rgba(0,0,0,0.22); text-align: center;
+}
+.emp-login-logo { font-size: 36px; margin-bottom: 8px; }
+.emp-login-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #1c4f80; }
+.emp-login-sub { font-size: 12px; color: #8aabcc; margin-bottom: 24px; }
+.emp-login-input {
+  width: 100%; border: 1.5px solid #b8d0e8; border-radius: 8px;
+  padding: 12px 14px; font-family: inherit; font-size: 15px; margin-bottom: 12px;
+  outline: none; transition: border-color 0.2s; text-align: center;
+}
+.emp-login-input:focus { border-color: #1c4f80; }
+.emp-login-btn {
+  width: 100%; background: #1c4f80; color: #fff; border: none; border-radius: 8px;
+  padding: 13px; font-family: inherit; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: opacity 0.2s; margin-bottom: 10px;
+}
+.emp-login-btn:hover { opacity: 0.88; }
+.emp-login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.emp-login-error { color: #c0392b; font-size: 13px; margin-top: 4px; min-height: 18px; }
+.emp-changepw-panel {
+  display: none; margin-top: 16px; border-top: 1px solid #e0ecf8; padding-top: 16px; text-align: left;
+}
+.emp-changepw-panel.open { display: block; }
+.emp-changepw-title { font-size: 13px; font-weight: 700; color: #1c4f80; margin-bottom: 10px; text-align: center; }
+</style>
 <script src="config.js"></script>
 <script src="i18n.js"></script>
 </head>
 <body>
 
+<!-- EMPLOYEE LOGIN SCREEN -->
+<div id="emp-login-screen">
+  <div class="emp-login-box">
+    <div class="emp-login-logo">📅</div>
+    <div class="emp-login-title" data-i18n="emp_login_title">员工班表</div>
+    <div class="emp-login-sub" data-i18n="emp_login_sub">Ume &amp; Comé 排班系统</div>
+    <div style="text-align:right;margin-bottom:10px;" id="login-lang-switch"></div>
+    <input class="emp-login-input" type="text" id="emp-login-name" data-i18n="emp_login_name_ph" data-i18n-attr="placeholder" placeholder="姓名"
+      onkeydown="if(event.key==='Enter')document.getElementById('emp-login-pw').focus()">
+    <input class="emp-login-input" type="password" id="emp-login-pw" data-i18n="emp_login_pw_ph" data-i18n-attr="placeholder" placeholder="密码"
+      onkeydown="if(event.key==='Enter')doEmpLogin()">
+    <button class="emp-login-btn" id="emp-login-btn" data-i18n="emp_login_btn" onclick="doEmpLogin()">登录</button>
+    <div class="emp-login-error" id="emp-login-error"></div>
+
+    <!-- 修改密码面板（登录成功后才显示，此处用于登录后弹出） -->
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main-app" style="display:none;">
+
+<!-- 修改密码 Modal -->
+<div class="modal-overlay" id="changepw-modal" style="z-index:9999;">
+  <div class="modal-box" style="max-width:360px;">
+    <div class="modal-title" data-i18n="cpw_title">🔑 修改密码</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+      <input type="password" id="cpw-old" data-i18n="cpw_old_ph" data-i18n-attr="placeholder" placeholder="当前密码" class="form-input" style="margin:0;">
+      <input type="password" id="cpw-new" data-i18n="cpw_new_ph" data-i18n-attr="placeholder" placeholder="新密码（至少4位）" class="form-input" style="margin:0;">
+      <input type="password" id="cpw-new2" data-i18n="cpw_new2_ph" data-i18n-attr="placeholder" placeholder="再次输入新密码" class="form-input" style="margin:0;">
+    </div>
+    <div id="cpw-error" style="color:#c0392b;font-size:13px;min-height:16px;margin-bottom:10px;"></div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" data-i18n="cancel" onclick="closeChangePwModal()">取消</button>
+      <button class="modal-btn confirm" data-i18n="cpw_submit" onclick="doEmpChangePw()">确认修改</button>
+    </div>
+  </div>
+</div>
+
 <nav class="topnav">
   <span class="topnav-title" id="nav-title">班表</span>
   <div class="topnav-tabs">
-    <button class="topnav-tab active" id="tab-calendar" onclick="showView('calendar')" data-i18n="app_tab_calendar">日历</button>
-    <button class="topnav-tab" id="tab-roster" onclick="showView('roster')" data-i18n="app_tab_roster">班表</button>
+    <button class="topnav-tab active" data-i18n="nav_schedule" onclick="showView('calendar')">班表</button>
+    <button class="topnav-tab" data-i18n="nav_roster" onclick="showView('roster')">班表</button>
   </div>
-  <div id="app-nav-lang-switch" style="display:flex;align-items:center;"></div>
+  <div style="display:flex;gap:4px;margin-left:auto;padding-left:8px;align-items:center;">
+    <span id="nav-lang-switch"></span>
+    <button class="topnav-tab" onclick="openChangePwModal()" data-i18n="nav_change_pw_title" data-i18n-attr="title" title="修改密码" style="font-size:11px;padding:4px 10px;">🔑</button>
+    <button class="topnav-tab" data-i18n="nav_logout" onclick="doEmpLogout()" data-i18n-title="nav_logout_title" title="退出登录" style="font-size:11px;padding:4px 10px;">退出</button>
+  </div>
 </nav>
 
 <!-- CALENDAR VIEW -->
 <div class="view active" id="view-calendar">
 
-  <!-- 名称 + 月份 行 -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;">
-    <input class="form-input" id="s-name" type="text" data-i18n="app_name_ph" data-i18n-attr="placeholder" placeholder="请输入名称"
-      style="max-width:140px;min-width:100px;flex-shrink:0;margin:0;"
-      oninput="onNameInput(this.value)">
-    <div style="text-align:center;flex:1;">
-      <div class="cal-month-label" id="cal-month-label"></div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" data-i18n="app_cal_hint">请填写下个月可工作时间</div>
-    </div>
-    <div style="width:140px;"></div>
+  <!-- 月份模式切换 -->
+  <div style="display:flex;justify-content:center;gap:8px;margin-bottom:10px;">
+    <button id="btn-mode-current" data-i18n="cal_tab_current" onclick="switchMonthMode('current')"
+      style="padding:5px 18px;border-radius:20px;border:1px solid var(--border);background:;font-size:13px;cursor:pointer;transition:all 0.15s;">本月</button>
+    <button id="btn-mode-next" data-i18n="cal_tab_next" onclick="switchMonthMode('next')"
+      style="padding:5px 18px;border-radius:20px;border:1px solid var(--border);background:var(--accent);color:#fff;border-color:var(--accent);font-size:13px;cursor:pointer;transition:all 0.15s;">下月</button>
   </div>
+
+  <!-- 月份标题行 -->
+  <div style="text-align:center;margin-bottom:16px;">
+    <div class="cal-month-label" id="cal-month-label"></div>
+    <div id="cal-mode-hint" style="font-size:11px;color:var(--text-muted);margin-top:2px;" data-i18n="cal_hint_next">请填写下个月可工作时间</div>
+  </div>
+  <!-- 保留 s-name 供旧代码引用，但隐藏 -->
+  <input type="hidden" id="s-name">
 
   <!-- 日历格 -->
   <div class="cal-grid">
-    <div class="cal-weekdays">
-      <div class="cal-wd">一</div>
-      <div class="cal-wd">二</div>
-      <div class="cal-wd">三</div>
-      <div class="cal-wd">四</div>
-      <div class="cal-wd">五</div>
-      <div class="cal-wd weekend">六</div>
-      <div class="cal-wd weekend">日</div>
-    </div>
+    <div class="cal-weekdays" id="cal-weekdays"></div>
     <div class="cal-days" id="cal-days"></div>
   </div>
 
   <div class="cal-legend">
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f5c0cc;border:1px solid #d97090;"></div><span data-i18n="app_legend_am">上午可工作</span></div>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#b8d4f0;border:1px solid #4a7fb5;"></div><span data-i18n="app_legend_pm">下午可工作</span></div>
-    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e8f0f8;border:1px solid #aac4d8;"></div><span data-i18n="app_legend_off">休息</span></div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#b8d4f0;border:1px solid #4a7fb5;"></div><span data-i18n="cal_legend_full">全天可工作</span></div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f5c0cc;border:1px solid #d97090;"></div><span data-i18n="cal_legend_half">半天可工作</span></div>
+    <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e8f0f8;border:1px solid #aac4d8;"></div><span data-i18n="cal_legend_off">休息</span></div>
   </div>
-  <div style="margin-top:10px;font-size:12px;color:var(--text-muted);text-align:center;" data-i18n="app_click_hint">点击日期可手动覆盖排班</div>
+  <div style="margin-top:10px;font-size:12px;color:var(--text-muted);text-align:center;" data-i18n="cal_hint_click_date">点击日期可手动覆盖排班</div>
 
   <!-- 默认规则（内嵌） -->
   <div class="settings-section" style="margin-top:20px;">
-    <h3 data-i18n="app_default_rules">默认规则</h3>
+    <h3 data-i18n="settings_rule">默认规则</h3>
     <div class="rule-builder">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;" data-i18n="app_rule_hint">点击星期设置可工作时段，再次点击切换全天／半天／清除：</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;" data-i18n="settings_day_hint">点击星期设置可工作时段，再次点击切换全天／半天／清除：</div>
       <!-- 星期格 -->
       <div class="rule-day-grid" id="rule-day-grid"></div>
       <!-- 全天/半天 选择按钮 + 清除 -->
       <div class="rule-slot-picker" style="margin-top:10px;">
-        <button class="slot-btn" id="sb-full" onclick="setSlotMode('full')" data-i18n="app_btn_full">☀️ 全天</button>
-        <button class="slot-btn" id="sb-half" onclick="setSlotMode('half')" data-i18n="app_btn_half">🌤 半天</button>
-        <button class="slot-btn" id="sb-off" onclick="clearAllRules()" style="flex:none;padding:8px 12px;" data-i18n="app_btn_clear_all">🔄 全部清除</button>
+        <button class="slot-btn" id="sb-full" data-i18n="cal_slot_full" onclick="setSlotMode('full')">☀️ 全天</button>
+        <button class="slot-btn" id="sb-half" data-i18n="cal_slot_half" onclick="setSlotMode('half')">🌤 半天</button>
+        <button class="slot-btn" id="sb-off" data-i18n="cal_clear_all" onclick="clearAllRules()" style="flex:none;padding:8px 12px;">🔄 全部清除</button>
       </div>
       <!-- 时间设置 -->
       <div id="time-settings-box" style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f0f6fc;border-radius:8px;padding:10px;">
-        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;" data-i18n="app_full_time_section">全天时段</div>
-        <label style="font-size:12px;color:var(--text);"><span data-i18n="app_time_start">开始</span> <input type="time" id="t-full-start" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
-        <label style="font-size:12px;color:var(--text);"><span data-i18n="app_time_end">结束</span> <input type="time" id="t-full-end" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
-        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;margin-top:4px;" data-i18n="app_half_time_section">半天时段</div>
-        <label style="font-size:12px;color:var(--text);"><span data-i18n="app_time_start">开始</span> <input type="time" id="t-half-start" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
-        <label style="font-size:12px;color:var(--text);"><span data-i18n="app_time_end">结束</span> <input type="time" id="t-half-end" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;" onchange="onTimeChange()"></label>
+        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;" data-i18n="settings_full_day">全天时段</div>
+        <label style="font-size:12px;color:var(--text);"><span data-i18n="settings_start">开始</span> <input type="text" id="t-full-start" maxlength="5" placeholder="07:00" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;width:60px;" onchange="onTimeChange()"></label>
+        <label style="font-size:12px;color:var(--text);"><span data-i18n="settings_end">结束</span> <input type="text" id="t-full-end" maxlength="5" placeholder="19:00" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;width:60px;" onchange="onTimeChange()"></label>
+        <div style="grid-column:1/-1;font-size:11px;color:var(--text-muted);font-weight:600;margin-top:4px;" data-i18n="settings_half_day">半天时段</div>
+        <label style="font-size:12px;color:var(--text);"><span data-i18n="settings_start">开始</span> <input type="text" id="t-half-start" maxlength="5" placeholder="07:00" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;width:60px;" onchange="onTimeChange()"></label>
+        <label style="font-size:12px;color:var(--text);"><span data-i18n="settings_end">结束</span> <input type="text" id="t-half-end" maxlength="5" placeholder="13:00" style="font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;width:60px;" onchange="onTimeChange()"></label>
       </div>
     </div>
     <div id="rule-preview" style="font-size:12px;color:var(--text-muted);line-height:1.8;margin-top:8px;"></div>
   </div>
 
-  <button class="generate-btn" data-i18n="app_generate_btn" onclick="generateRoster()">生成班表 →</button>
+  <button class="generate-btn" data-i18n="settings_generate" onclick="generateRoster()">生成班表 →</button>
 </div>
 
 
@@ -687,18 +758,25 @@ body {
   <div class="roster-legend">
     <div class="roster-legend-item">
       <div class="roster-legend-swatch" style="background:#90c4e8;"></div>
-      <span data-i18n="app_slot_full">全天</span>
+      <span data-i18n="cal_slot_full">全天</span>
     </div>
     <div class="roster-legend-item">
       <div class="roster-legend-swatch" style="background:#d0ecf8;"></div>
-      <span data-i18n="app_slot_half">半天</span>
+      <span data-i18n="cal_slot_half">半天</span>
     </div>
   </div>
 
   <div style="margin-top:14px;" id="roster-content"></div>
 
+  <!-- 备注（仅本月提交时显示） -->
+  <div id="emp-note-box" style="display:none;margin-top:14px;padding:12px;background:#f0f4ff;border:1px solid #b0c4ef;border-radius:10px;">
+    <label style="font-size:12px;font-weight:600;color:#2c5282;display:block;margin-bottom:6px;" data-i18n="note_label">💬 备注说明（选填）</label>
+    <textarea id="emp-note-input" rows="3" data-i18n="note_ph" data-i18n-attr="placeholder" placeholder="可在此填写本次填写说明或修改说明，管理员可见…"
+      style="width:100%;box-sizing:border-box;border:1px solid #b0c4ef;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;resize:vertical;"></textarea>
+  </div>
+
   <!-- Submit button -->
-  <button class="submit-btn" id="submit-btn" data-i18n="app_submit_btn" onclick="openSubmitConfirm()">
+  <button class="submit-btn" id="submit-btn" data-i18n="submit_btn" onclick="openSubmitConfirm()">
     ✉️ 提交班表给管理员
   </button>
   <div class="submit-status" id="submit-status"></div>
@@ -708,37 +786,37 @@ body {
 <div id="override-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
   <div style="background:var(--surface);border-radius:var(--radius);padding:24px;width:290px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
     <div style="font-size:15px;font-weight:700;margin-bottom:6px;" id="modal-date-label"></div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;" data-i18n="app_override_hint">选择该日排班：</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">选择该日排班：</div>
     <div style="display:flex;flex-direction:column;gap:8px;">
-      <button class="export-btn" style="width:100%;" onclick="applyOverride('full')" data-i18n="app_override_full">☀️ 全天</button>
-      <button class="export-btn" style="width:100%;" onclick="applyOverride('half')" data-i18n="app_override_half">🌤 半天</button>
-      <button class="export-btn" style="width:100%;" onclick="applyOverride('off')" data-i18n="app_override_off">💤 休息</button>
-      <button class="export-btn" style="width:100%;background:#f4f0ff;border-color:#9b59b6;color:#6c3483;" onclick="toggleCustomInput()" data-i18n="app_override_custom">🕐 自定时间</button>
-      <!-- custom time input -->
+      <button class="export-btn" data-i18n="cal_slot_full" style="width:100%;" onclick="applyOverride('full')">☀️ 全天</button>
+      <button class="export-btn" data-i18n="cal_slot_half" style="width:100%;" onclick="applyOverride('half')">🌤 半天</button>
+      <button class="export-btn" data-i18n="cal_slot_off" style="width:100%;" onclick="applyOverride('off')">💤 休息</button>
+      <button class="export-btn" data-i18n="cal_slot_custom" style="width:100%;background:#f4f0ff;border-color:#9b59b6;color:#6c3483;" onclick="toggleCustomInput()">🕐 自定时间</button>
+      <!-- 自定时间输入框 -->
       <div id="custom-time-box" style="display:none;background:#f8f4ff;border:1.5px solid #c39bd3;border-radius:8px;padding:12px;margin-top:2px;">
         <div style="font-size:11px;color:#6c3483;font-weight:600;margin-bottom:8px;" data-i18n="app_custom_time_title">自定义上班时间</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <label style="font-size:12px;"><span data-i18n="app_time_start">开始</span><br><input type="time" id="custom-start" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
-          <label style="font-size:12px;"><span data-i18n="app_time_end">结束</span><br><input type="time" id="custom-end" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
+          <label style="font-size:12px;"><span data-i18n="custom_time_start">开始</span><br><input type="text" id="custom-start" maxlength="5" data-i18n="custom_time_start_ph" data-i18n-attr="placeholder" placeholder="如 09:00" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
+          <label style="font-size:12px;"><span data-i18n="custom_time_end">结束</span><br><input type="text" id="custom-end" maxlength="5" data-i18n="custom_time_end_ph" data-i18n-attr="placeholder" placeholder="如 24:00" style="width:100%;font-family:inherit;font-size:13px;border:1px solid #c39bd3;border-radius:4px;padding:4px;margin-top:2px;"></label>
         </div>
-        <button onclick="applyCustomOverride()" style="margin-top:10px;width:100%;background:#9b59b6;color:#fff;border:none;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;" data-i18n="app_custom_time_confirm">确认自定时间</button>
+        <button data-i18n="app_custom_time_confirm" onclick="applyCustomOverride()" style="margin-top:10px;width:100%;background:#9b59b6;color:#fff;border:none;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">确认自定时间</button>
       </div>
-      <button class="export-btn" style="width:100%;color:var(--text-muted);" onclick="applyOverride(null)" data-i18n="app_override_restore">↩ 恢复默认</button>
+      <button class="export-btn" data-i18n="override_restore_default" style="width:100%;color:var(--text-muted);" onclick="applyOverride(null)">↩ 恢复默认</button>
     </div>
-    <button onclick="closeModal()" style="margin-top:14px;width:100%;background:none;border:none;font-family:inherit;font-size:13px;color:var(--text-muted);cursor:pointer;" data-i18n="cancel">取消</button>
+    <button data-i18n="cancel" onclick="closeModal()" style="margin-top:14px;width:100%;background:none;border:none;font-family:inherit;font-size:13px;color:var(--text-muted);cursor:pointer;">取消</button>
   </div>
 </div>
 
 <!-- Submit Confirm Modal -->
 <div class="modal-overlay" id="submit-modal">
   <div class="modal-box">
-    <div class="modal-title" data-i18n="app_submit_title">📋 确认提交班表</div>
-    <div class="modal-body" id="submit-modal-body" data-i18n="app_submit_body">
+    <div class="modal-title" data-i18n="submit_modal_title">📋 确认提交班表</div>
+    <div class="modal-body" id="submit-modal-body">
       确认将您的可工作时段提交给管理员吗？提交后管理员将根据此信息安排上班时间。
     </div>
     <div class="modal-actions">
       <button class="modal-btn cancel" data-i18n="cancel" onclick="closeSubmitModal()">取消</button>
-      <button class="modal-btn confirm" id="confirm-submit-btn" data-i18n="app_submit_confirm_btn" onclick="doSubmit()">确认提交</button>
+      <button class="modal-btn confirm" data-i18n="submit_confirm_btn" id="confirm-submit-btn" onclick="doSubmit()">确认提交</button>
     </div>
   </div>
 </div>
@@ -746,20 +824,33 @@ body {
 <script>
 // ── 后端适配层 ────────────────────────────────────────────────────
 const Backend = {
-  // 提交班表（POST）
-  async postSchedule(payload) {
+  _get(params) {
+    const base = BACKEND_MODE === 'local' ? LOCAL_API_URL : APPS_SCRIPT_URL;
+    return fetch(base + '?' + new URLSearchParams(params).toString()).then(r => r.json());
+  },
+  _post(body) {
     if (BACKEND_MODE === 'local') {
-      const resp = await fetch(LOCAL_API_URL, {
+      return fetch(LOCAL_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, action: 'submitSchedule' })
-      });
-      return await resp.json();
+        body: JSON.stringify(body)
+      }).then(r => r.json());
     } else {
-      // GAS: 使用 no-cors，无法读取响应体，视为成功
-      await fetch(APPS_SCRIPT_URL, {
+      return fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(body)
+      }).then(r => r.json()).catch(() => ({ success: true }));
+    }
+  },
+
+  // 提交班表（GAS 用 no-cors，不读响应体）
+  async postSchedule(payload) {
+    if (BACKEND_MODE === 'local') {
+      return this._post({ ...payload, action: 'submitSchedule' });
+    } else {
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST', mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
@@ -767,21 +858,26 @@ const Backend = {
     }
   },
 
-  // 读取班表提交（GET）
+  // 获取员工账号列表（从服务器读取，支持跨设备）
+  async getEmpAccounts() {
+    return this._get({ action: 'getEmpAccounts' });
+  },
+
+  // 员工修改密码（传哈希值，不传明文）
+  async changeEmpPassword(name, oldPasswordHash, newPasswordHash) {
+    return this._post({ action: 'changeEmpPassword', name, oldPasswordHash, newPasswordHash });
+  },
+
+  // 获取某月的班表提交列表
   async getSubmissions(year, month) {
-    if (BACKEND_MODE === 'local') {
-      const resp = await fetch(`${LOCAL_API_URL}?action=getSubmissions&year=${year}&month=${month}`);
-      return await resp.json();
-    } else {
-      const resp = await fetch(`${APPS_SCRIPT_URL}?action=getSubmissions&year=${year}&month=${month}`);
-      return await resp.json();
-    }
-  }
+    return this._get({ action: 'getSubmissions', year, month });
+  },
 };
 
 // ── STATE ──
 let state = {
   calYear: 0, calMonth: 0,
+  monthMode: 'next', // 'next' | 'current'
   settings: {
     name: '某某',
     logic: 'include',
@@ -791,10 +887,13 @@ let state = {
     halfStart: '07:00',
     halfEnd:   '13:00'
   },
-  overrides: {},
+  overrides: {},       // keyed by "YYYY-MM-DD"（当前模式月份的override）
+  overridesNext: {},   // 下月 overrides（切换月份时保留）
+  overridesCurrent: {}, // 本月 overrides
   rosterColor: 'blue',
   rosterMonth: null,
-  slotMode: 'full'
+  slotMode: 'full',
+  prevSubmissionCache: {}, // "year||month" → schedule array from server
 };
 
 const DAY_NAMES_ZH = ['一','二','三','四','五','六','日'];
@@ -814,6 +913,8 @@ function loadState() {
       if (!state.settings.halfStart) state.settings.halfStart = '07:00';
       if (!state.settings.halfEnd)   state.settings.halfEnd   = '13:00';
       state.overrides = parsed.overrides || {};
+      state.overridesNext = parsed.overridesNext || {};
+      state.overridesCurrent = parsed.overridesCurrent || {};
       state.rosterColor = parsed.rosterColor || 'blue';
     }
   } catch(e){}
@@ -822,6 +923,8 @@ function saveState() {
   localStorage.setItem('schedule_app_v2', JSON.stringify({
     settings: state.settings,
     overrides: state.overrides,
+    overridesNext: state.overridesNext,
+    overridesCurrent: state.overridesCurrent,
     rosterColor: state.rosterColor
   }));
 }
@@ -829,19 +932,15 @@ function saveState() {
 // ── VIEWS ──
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  // Only clear nav tabs (not lang-switch buttons)
-  ['tab-calendar','tab-roster'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('active');
-  });
+  document.querySelectorAll('.topnav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
-  const tabEl = document.getElementById('tab-' + name);
-  if (tabEl) tabEl.classList.add('active');
+  const tabs = ['calendar','roster'];
+  document.querySelectorAll('.topnav-tab')[tabs.indexOf(name)].classList.add('active');
   if (name === 'calendar') { renderCalendar(); renderInlineSettings(); }
 }
 
 // ── CALENDAR ──
-// 计算"下个月"的年月，员工只能填写下个月的班表
+// 计算"下个月"的年月
 function getNextMonth() {
   const now = new Date();
   let y = now.getFullYear(), m = now.getMonth() + 1;
@@ -849,26 +948,134 @@ function getNextMonth() {
   return { y, m };
 }
 
+// 计算"本月"的年月
+function getCurrentMonth() {
+  const now = new Date();
+  return { y: now.getFullYear(), m: now.getMonth() + 1 };
+}
+
+// 根据今天是否月底（剩余不足7天）决定默认显示本月还是下月
+function getDefaultMonthMode() {
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return (lastDay - now.getDate()) < 7 ? 'next' : 'current';
+}
+
+// 今天的 dateKey
+function getTodayKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+}
+
+// 切换月份模式（本月/下月），并持久化各自的 overrides
+function switchMonthMode(mode) {
+  if (state.monthMode === mode) return;
+  // 保存当前 overrides 到对应存储
+  if (state.monthMode === 'next') {
+    state.overridesNext = { ...state.overrides };
+  } else {
+    state.overridesCurrent = { ...state.overrides };
+  }
+  state.monthMode = mode;
+  // 恢复目标月份的 overrides
+  if (mode === 'next') {
+    state.overrides = { ...state.overridesNext };
+    const { y, m } = getNextMonth();
+    state.calYear = y; state.calMonth = m;
+  } else {
+    state.overrides = { ...state.overridesCurrent };
+    const { y, m } = getCurrentMonth();
+    state.calYear = y; state.calMonth = m;
+    // 尝试加载本月之前提交的数据
+    loadPrevSubmission(y, m);
+  }
+  saveState();
+  updateMonthModeTabs();
+  renderCalendar();
+  renderInlineSettings();
+}
+
+function updateMonthModeTabs() {
+  const btnCurrent = document.getElementById('btn-mode-current');
+  const btnNext    = document.getElementById('btn-mode-next');
+  if (!btnCurrent || !btnNext) return;
+  if (state.monthMode === 'current') {
+    btnCurrent.style.background = 'var(--accent)';
+    btnCurrent.style.color = '#fff';
+    btnCurrent.style.borderColor = 'var(--accent)';
+    btnNext.style.background = '';
+    btnNext.style.color = '';
+    btnNext.style.borderColor = '';
+  } else {
+    btnNext.style.background = 'var(--accent)';
+    btnNext.style.color = '#fff';
+    btnNext.style.borderColor = 'var(--accent)';
+    btnCurrent.style.background = '';
+    btnCurrent.style.color = '';
+    btnCurrent.style.borderColor = '';
+  }
+}
+
+// 加载服务器上该员工某月的历史提交（用于本月重提时的对比和过去日期复制）
+async function loadPrevSubmission(year, month) {
+  const cacheKey = `${year}||${month}`;
+  if (state.prevSubmissionCache[cacheKey]) return; // 已缓存
+  try {
+    const result = await Backend.getSubmissions(year, month);
+    if (result && result.submissions) {
+      const name = state.settings.name;
+      const mySub = result.submissions.find(s => s.name === name);
+      if (mySub && mySub.schedule) {
+        state.prevSubmissionCache[cacheKey] = mySub.schedule;
+      } else {
+        state.prevSubmissionCache[cacheKey] = null; // 无历史提交
+      }
+      renderCalendar(); // 刷新（可能影响已过去日期的显示）
+    }
+  } catch(e) {
+    state.prevSubmissionCache[cacheKey] = null;
+  }
+}
+
 function initCalendar() {
-  const { y, m } = getNextMonth();
-  state.calYear = y;
-  state.calMonth = m;
+  if (state.monthMode === 'current') {
+    const { y, m } = getCurrentMonth();
+    state.calYear = y;
+    state.calMonth = m;
+  } else {
+    const { y, m } = getNextMonth();
+    state.calYear = y;
+    state.calMonth = m;
+  }
 }
 
 function changeMonth(delta) {
-  // 员工只可提交下个月的班表，月份切换已禁用
+  // 员工只可提交本月或下月，不允许任意切换
 }
 
-// 将时间字符串"HH:MM"转为分钟数
+// 将时间字符串"HH:MM"转为分钟数（00:00 视为 24:00 = 1440）
 function timeToMinutes(t) {
   if (!t) return 0;
   const [h, m] = t.split(':').map(Number);
+  if (h === 0 && (m || 0) === 0) return 1440;
   return h * 60 + (m || 0);
 }
 // 00:00 显示为 24:00
 function fmtTime(t) {
   if (!t) return t;
   return t === '00:00' ? '24:00' : t;
+}
+// 解析文本时间输入（支持 24:00），返回内部存储格式 HH:MM（24:00 → 00:00）
+function normalizeTimeInput(raw) {
+  if (!raw) return '';
+  const s = raw.trim().replace('：', ':');
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return '';
+  let h = parseInt(m[1]), min = parseInt(m[2]);
+  if (min > 59) return '';
+  if (h === 24 && min === 0) return '00:00';
+  if (h > 23) return '';
+  return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
 }
 // 根据 slot 的时长判断显示类别：'full' | 'half'
 function slotDisplayType(slot) {
@@ -915,19 +1122,47 @@ function getSlotForDate(year, month, day) {
   return { type: 'off', start: '', end: '' };
 }
 
+function renderWeekdayHeader() {
+  const wd = document.getElementById('cal-weekdays');
+  if (!wd) return;
+  const wdKeys = ['cal_wd_0','cal_wd_1','cal_wd_2','cal_wd_3','cal_wd_4','cal_wd_5','cal_wd_6'];
+  wd.innerHTML = wdKeys.map((k, i) =>
+    `<div class="cal-wd${i >= 5 ? ' weekend' : ''}">${t(k)}</div>`
+  ).join('');
+}
+
 function renderCalendar() {
+  renderWeekdayHeader();
   const y = state.calYear, m = state.calMonth;
-  const monthNames = getLang()==='en' ? t('cal_months') : ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-  document.getElementById('cal-month-label').textContent = getLang()==='en' ? `${monthNames[m-1]} ${y}` : `${y}年 ${monthNames[m-1]}`;
-  const name = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (getLang()==='en' ? 'Staff' : '某某');
-  document.getElementById('nav-title').textContent = getLang()==='en' ? `${name}'s Schedule` : `${name}的班表`;
+  const monthNames = t('cal_months');
+  const yearLabel = getLang() === 'en'
+    ? `${monthNames[m-1]} ${y}`
+    : `${y}年 ${monthNames[m-1]}`;
+  document.getElementById('cal-month-label').textContent = yearLabel;
+  document.getElementById('nav-title').textContent = getLang() === 'en'
+    ? `${state.settings.name}'s Schedule`
+    : state.settings.name + '的班表';
 
   const firstDay = new Date(y, m-1, 1);
   const daysInMonth = new Date(y, m, 0).getDate();
   const startWd = (firstDay.getDay() + 6) % 7;
 
-  const today = new Date();
-  const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const todayKey = getTodayKey();
+  const isCurrent = state.monthMode === 'current';
+  const cacheKey = `${y}||${m}`;
+  const prevSchedule = state.prevSubmissionCache[cacheKey] || null;
+
+  // 更新提示语
+  const hintEl = document.getElementById('cal-mode-hint');
+  if (hintEl) {
+    if (isCurrent) {
+      hintEl.textContent = prevSchedule
+        ? t('cal_hint_current_with_prev')
+        : t('cal_hint_current_no_prev');
+    } else {
+      hintEl.textContent = t('cal_hint_next');
+    }
+  }
 
   let html = '';
   for (let i = 0; i < startWd; i++) {
@@ -938,24 +1173,48 @@ function renderCalendar() {
     const wd = (startWd + d - 1) % 7;
     const isWeekend = wd >= 5;
     const isToday = key === todayKey;
-    const slot = getSlotForDate(y, m, d);
+    const isPast = isCurrent && key < todayKey; // 本月已过去的日期
     const hasOverride = state.overrides[key] !== undefined;
+
+    let slot;
+    if (isPast && prevSchedule) {
+      // 过去日期：从历史提交数据中读取（只读展示）
+      const prevEntry = prevSchedule.find(e => e.date === key);
+      if (prevEntry) {
+        slot = { type: prevEntry.slot || 'off', start: prevEntry.start || '', end: prevEntry.end || '' };
+      } else {
+        slot = { type: 'off', start: '', end: '' };
+      }
+    } else if (isPast) {
+      // 过去日期但无历史提交：显示休息
+      slot = { type: 'off', start: '', end: '' };
+    } else {
+      slot = getSlotForDate(y, m, d);
+    }
 
     let slotHTML = '';
     if (slot.type === 'full') {
-      slotHTML += `<div class="cal-slot am"><span class="cal-slot-dot"></span>${fmtTime(slot.start)}–${fmtTime(slot.end)}</div>`;
-    } else if (slot.type === 'half') {
       slotHTML += `<div class="cal-slot pm"><span class="cal-slot-dot"></span>${fmtTime(slot.start)}–${fmtTime(slot.end)}</div>`;
+    } else if (slot.type === 'half') {
+      slotHTML += `<div class="cal-slot am"><span class="cal-slot-dot"></span>${fmtTime(slot.start)}–${fmtTime(slot.end)}</div>`;
     } else if (slot.type === 'custom') {
       slotHTML += `<div class="cal-slot" style="background:#f0e6ff;color:#6c3483;border-radius:3px;font-size:9px;padding:2px 3px;"><span class="cal-slot-dot" style="background:#9b59b6;"></span>${fmtTime(slot.start)}–${fmtTime(slot.end)}</div>`;
     } else {
-      slotHTML += `<div class="cal-slot off">${t('app_slot_off')}</div>`;
+      slotHTML += `<div class="cal-slot off">${t('cal_day_off')}</div>`;
     }
 
-    html += `<div class="cal-day ${isWeekend?'weekend':''} ${isToday?'today':''}" onclick="openOverride('${key}',${d})">
-      <div class="cal-day-num">${d}${hasOverride ? '<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--accent);"></span>' : ''}</div>
-      <div class="cal-day-slots">${slotHTML}</div>
-    </div>`;
+    if (isPast) {
+      // 已过去：锁定，不可点击，显示半透明
+      html += `<div class="cal-day ${isWeekend?'weekend':''}" style="opacity:0.45;cursor:default;pointer-events:none;">
+        <div class="cal-day-num">${d}</div>
+        <div class="cal-day-slots">${slotHTML}</div>
+      </div>`;
+    } else {
+      html += `<div class="cal-day ${isWeekend?'weekend':''} ${isToday?'today':''}" onclick="openOverride('${key}',${d})">
+        <div class="cal-day-num">${d}${hasOverride ? '<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--accent);"></span>' : ''}</div>
+        <div class="cal-day-slots">${slotHTML}</div>
+      </div>`;
+    }
   }
   document.getElementById('cal-days').innerHTML = html;
 }
@@ -965,9 +1224,9 @@ let modalKey = null;
 function openOverride(key, day) {
   modalKey = key;
   const parts = key.split('-');
-  const dateLabel = getLang()==='en'
-    ? `${t('cal_months')[parseInt(parts[1])-1]} ${parseInt(parts[2])}, ${parts[0]}`
-    : `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+  const dateLabel = getLang() === 'en'
+    ? t('cal_override_title', { date: `${parseInt(parts[2])} ${t('cal_months')[parseInt(parts[1])-1]} ${parts[0]}` })
+    : t('cal_override_title', { date: `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日` });
   document.getElementById('modal-date-label').textContent = dateLabel;
   const m = document.getElementById('override-modal');
   m.style.display = 'flex';
@@ -993,17 +1252,17 @@ function toggleCustomInput() {
     const cur = modalKey ? state.overrides[modalKey] : null;
     const defStart = (cur && typeof cur === 'object') ? cur.start : state.settings.fullStart;
     const defEnd   = (cur && typeof cur === 'object') ? cur.end   : state.settings.fullEnd;
-    document.getElementById('custom-start').value = defStart || '07:00';
-    document.getElementById('custom-end').value   = defEnd   || '19:00';
+    document.getElementById('custom-start').value = fmtTime(defStart || '07:00');
+    document.getElementById('custom-end').value   = fmtTime(defEnd   || '19:00');
   }
   box.style.display = isOpen ? 'none' : 'block';
 }
 function applyCustomOverride() {
   if (!modalKey) return;
-  const start = document.getElementById('custom-start').value;
-  const end   = document.getElementById('custom-end').value;
-  if (!start || !end) { alert(getLang()==='en' ? 'Please enter both start and end times.' : '请填写开始和结束时间'); return; }
-  if (start >= end) { alert(getLang()==='en' ? 'End time must be after start time.' : '结束时间必须晚于开始时间'); return; }
+  const start = normalizeTimeInput(document.getElementById('custom-start').value);
+  const end   = normalizeTimeInput(document.getElementById('custom-end').value);
+  if (!start || !end) { alert(t('custom_time_invalid')); return; }
+  if (timeToMinutes(start) >= timeToMinutes(end)) { alert(t('custom_time_order')); return; }
   state.overrides[modalKey] = { type: 'custom', start, end };
   saveState();
   closeModal();
@@ -1016,8 +1275,7 @@ let slotModeState = 'full';
 function onNameInput(val) {
   state.settings.name = val.trim() || '某某';
   saveState();
-  const _n = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (getLang()==='en' ? 'Staff' : '某某');
-  document.getElementById('nav-title').textContent = getLang()==='en' ? `${_n}'s Schedule` : `${_n}的班表`;
+  document.getElementById('nav-title').textContent = state.settings.name + '的班表';
 }
 
 function setSlotMode(mode) {
@@ -1034,10 +1292,10 @@ function setSlotMode(mode) {
 }
 
 function onTimeChange() {
-  state.settings.fullStart = document.getElementById('t-full-start').value || '07:00';
-  state.settings.fullEnd   = document.getElementById('t-full-end').value   || '19:00';
-  state.settings.halfStart = document.getElementById('t-half-start').value || '07:00';
-  state.settings.halfEnd   = document.getElementById('t-half-end').value   || '13:00';
+  state.settings.fullStart = normalizeTimeInput(document.getElementById('t-full-start').value) || '07:00';
+  state.settings.fullEnd   = normalizeTimeInput(document.getElementById('t-full-end').value)   || '19:00';
+  state.settings.halfStart = normalizeTimeInput(document.getElementById('t-half-start').value) || '07:00';
+  state.settings.halfEnd   = normalizeTimeInput(document.getElementById('t-half-end').value)   || '13:00';
   saveState();
   renderCalendar();
 }
@@ -1052,23 +1310,26 @@ function renderInlineSettings() {
   // 同步时间输入框
   const tfs = document.getElementById('t-full-start');
   if (tfs) {
-    tfs.value = state.settings.fullStart || '07:00';
-    document.getElementById('t-full-end').value   = state.settings.fullEnd   || '19:00';
-    document.getElementById('t-half-start').value = state.settings.halfStart || '07:00';
-    document.getElementById('t-half-end').value   = state.settings.halfEnd   || '13:00';
+    tfs.value = fmtTime(state.settings.fullStart || '07:00');
+    document.getElementById('t-full-end').value   = fmtTime(state.settings.fullEnd   || '19:00');
+    document.getElementById('t-half-start').value = fmtTime(state.settings.halfStart || '07:00');
+    document.getElementById('t-half-end').value   = fmtTime(state.settings.halfEnd   || '13:00');
   }
 
   const grid = document.getElementById('rule-day-grid');
+  const dayNamesI18n = t('cal_days');
   grid.innerHTML = '';
-  const _dayNames = getLang()==='en' ? DAY_NAMES_EN : DAY_NAMES_ZH;
-  const _slotLabels = getLang()==='en' ? {half:'Half',full:'Full',off:'Off'} : {half:'半天',full:'全天',off:'休'};
-  _dayNames.forEach((dayName, i) => {
+  dayNamesI18n.forEach((name, i) => {
     const rule = state.settings.dayRules[i];
     let cls = '';
     if (rule === 'full') cls = 'selected-full';
     else if (rule === 'half') cls = 'selected-half';
-    const slotLabel = rule ? (_slotLabels[rule] || rule) : '—';
-    grid.innerHTML += `<button class="rule-day-btn ${cls}" onclick="toggleRuleDay(${i})" title="${dayName}">${dayName}<br><span style="font-size:9px;">${slotLabel}</span></button>`;
+    const slotLabel = rule ? ({
+      'half': t('cal_slot_half'),
+      'full': t('cal_slot_full'),
+      'off':  t('cal_slot_off')
+    }[rule] || rule) : '—';
+    grid.innerHTML += `<button class="rule-day-btn ${cls}" onclick="toggleRuleDay(${i})" title="${name}">${name}<br><span style="font-size:9px;">${slotLabel}</span></button>`;
   });
 
   setSlotMode(slotModeState);
@@ -1095,34 +1356,40 @@ function clearAllRules() {
 
 function updateRulePreview() {
   const rules = state.settings.dayRules;
-  const isEn = getLang() === 'en';
-  const dayNames = isEn ? DAY_NAMES_EN : ['周一','周二','周三','周四','周五','周六','周日'];
-  const slotLabel = isEn ? {full:'Full Day', half:'Half Day', off:'Off'} : {full:'全天', half:'半天', off:'休息'};
+  const dayNames = t('cal_days');
+  const slotLabel = {
+    full: t('cal_slot_full'),
+    half: t('cal_slot_half'),
+    off:  t('cal_slot_off')
+  };
   let set = rules.map((r,i) => r ? `${dayNames[i]} ${slotLabel[r] || r}` : null).filter(Boolean);
   if (set.length === 0) {
-    document.getElementById('rule-preview').textContent = isEn ? '(No rules set — all dates default to Off)' : '（尚未设置任何规则，所有日期默认休息）';
+    document.getElementById('rule-preview').textContent = t('settings_rule_preview_empty');
     return;
   }
-  document.getElementById('rule-preview').textContent = isEn ? `Default working: ${set.join(', ')}` : `默认：${set.join('、')} 工作`;
+  document.getElementById('rule-preview').textContent = t('settings_rule_preview', { days: set.join('、') });
 }
 
 // legacy alias (keeped for any remaining call sites)
 function saveSettings() {
   state.settings.name = document.getElementById('s-name').value.trim() || '某某';
-  state.settings.logic = 'include';
+  state.settings.logic = 'include'; // 固定为选择工作时段
   saveState();
-  const _sn = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (getLang()==='en' ? 'Staff' : '某某');
-  document.getElementById('nav-title').textContent = getLang()==='en' ? `${_sn}'s Schedule` : `${_sn}的班表`;
+  document.getElementById('nav-title').textContent = state.settings.name + '的班表';
 }
 
 // ── ROSTER ──
 function generateRoster() {
   const { y: ny, m: nm } = getNextMonth();
-  if (state.calYear !== ny || state.calMonth !== nm) {
-    alert(getLang()==='en' ? 'You can only submit availability for next month.' : '只能提交下个月的班表。');
+  const { y: cy, m: cm } = getCurrentMonth();
+  const isCurrent = state.monthMode === 'current';
+  const expectedY = isCurrent ? cy : ny;
+  const expectedM = isCurrent ? cm : nm;
+  if (state.calYear !== expectedY || state.calMonth !== expectedM) {
+    alert(isCurrent ? '请切换到本月视图再生成班表。' : '请切换到下月视图再生成班表。');
     return;
   }
-  state.rosterMonth = { year: state.calYear, month: state.calMonth };
+  state.rosterMonth = { year: state.calYear, month: state.calMonth, mode: state.monthMode };
   renderRoster();
   showView('roster');
   // Reset submit status
@@ -1130,6 +1397,15 @@ function generateRoster() {
   st.className = 'submit-status';
   st.textContent = '';
   document.getElementById('submit-btn').disabled = false;
+  // 显示/隐藏备注框（本月且有历史提交才显示备注）
+  updateNoteBox();
+}
+
+function updateNoteBox() {
+  const noteBox = document.getElementById('emp-note-box');
+  if (!noteBox) return;
+  // 所有提交都显示备注框（选填）
+  noteBox.style.display = 'block';
 }
 
 function setRosterColor(color) {
@@ -1140,19 +1416,37 @@ function setRosterColor(color) {
   renderRoster();
 }
 
+function getRosterSlotForDate(y, m, d) {
+  // 本月模式下，过去的日期从历史提交读取
+  const isCurrent = state.rosterMonth && state.rosterMonth.mode === 'current';
+  const todayKey = getTodayKey();
+  const dateKey = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  if (isCurrent && dateKey < todayKey) {
+    const cacheKey = `${y}||${m}`;
+    const prevSchedule = state.prevSubmissionCache[cacheKey] || null;
+    if (prevSchedule) {
+      const prevEntry = prevSchedule.find(e => e.date === dateKey);
+      if (prevEntry) return { type: prevEntry.slot || 'off', start: prevEntry.start || '', end: prevEntry.end || '' };
+    }
+    return { type: 'off', start: '', end: '' };
+  }
+  return getSlotForDate(y, m, d);
+}
+
 function renderRoster() {
   if (!state.rosterMonth) {
-    state.rosterMonth = { year: state.calYear, month: state.calMonth };
+    state.rosterMonth = { year: state.calYear, month: state.calMonth, mode: state.monthMode };
   }
+  updateNoteBox();
   const { year: y, month: m } = state.rosterMonth;
-  const monthNames = getLang()==='en' ? t('cal_months') : ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  const monthNames = t('cal_months');
   const color = state.rosterColor;
   const fillClass = `filled-${color}`;
-  const _rn = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (getLang()==='en' ? 'Staff' : '某某');
 
-  document.getElementById('roster-title-label').textContent = getLang()==='en'
-    ? `${_rn} · ${monthNames[m-1]} ${y} · Availability`
-    : `${y}年${monthNames[m-1]} · ${_rn}的可工作时段`;
+  const rosterTitle = getLang() === 'en'
+    ? t('roster_title', { year: y, month: monthNames[m-1], name: state.settings.name })
+    : `${y}年${monthNames[m-1]} · ${state.settings.name}的可工作时段`;
+  document.getElementById('roster-title-label').textContent = rosterTitle;
 
   const firstDay = new Date(y, m-1, 1);
   const daysInMonth = new Date(y, m, 0).getDate();
@@ -1169,19 +1463,19 @@ function renderRoster() {
     }
   }
 
-  const _rosterBarTitle = getLang()==='en'
-    ? `${_rn} · ${monthNames[m-1]} ${y} · Availability`
-    : `${_rn} · ${y}年${monthNames[m-1]} · 可工作时段`;
+  const rosterBar = getLang() === 'en'
+    ? `${state.settings.name} · ${monthNames[m-1]} ${y} · ${t('roster_available')}`
+    : `${state.settings.name} · ${y}年${monthNames[m-1]} · ${t('roster_available')}`;
   let html = `<div class="roster-wrap" id="roster-printable">
-    <div class="roster-name-bar">${_rosterBarTitle}</div>`;
+    <div class="roster-name-bar">${rosterBar}</div>`;
 
   weeks.forEach(week => {
     html += `<div class="roster-week">
       <div class="roster-week-head">
         <div class="roster-wh-cell" style="position:relative;overflow:hidden;font-size:9px;">
           <svg style="position:absolute;top:0;left:0;width:100%;height:100%;"><line x1="0" y1="0" x2="100%" y2="100%" stroke="#b0a89e" stroke-width="1"/></svg>
-          <span style="position:absolute;top:3px;right:4px;font-size:8px;color:#999;">${getLang()==='en'?'Date':'日期'}</span>
-          <span style="position:absolute;bottom:3px;left:4px;font-size:8px;color:#999;">${getLang()==='en'?'Name':'姓名'}</span>
+          <span style="position:absolute;top:3px;right:4px;font-size:8px;color:#999;">日期</span>
+          <span style="position:absolute;bottom:3px;left:4px;font-size:8px;color:#999;">姓名</span>
         </div>`;
     week.forEach((d, i) => {
       const engDay = DAY_NAMES_EN[i];
@@ -1191,9 +1485,9 @@ function renderRoster() {
     html += `</div>`;
 
     html += `<div class="roster-slot-row am-row">
-      <div class="roster-label-cell">${getLang()==='en'?'Availability':'可工作时段'}</div>`;
+      <div class="roster-label-cell">${t('roster_available')}</div>`;
     week.forEach(d => {
-      const slot = d ? getSlotForDate(y, m, d) : null;
+      const slot = d ? getRosterSlotForDate(y, m, d) : null;
       const isOff = !slot || slot.type === 'off';
       const dispType = slotDisplayType(slot); // 'full' | 'half' | 'off'
       const filled = !isOff ? `filled-${dispType}` : '';
@@ -1220,39 +1514,62 @@ function renderRoster() {
 // ── SUBMIT FLOW ──
 function buildSchedulePayload() {
   if (!state.rosterMonth) return null;
-  const { year: y, month: m } = state.rosterMonth;
+  const { year: y, month: m, mode } = state.rosterMonth;
   const daysInMonth = new Date(y, m, 0).getDate();
+  const todayKey = getTodayKey();
+  const isCurrent = mode === 'current';
+  const cacheKey = `${y}||${m}`;
+  const prevSchedule = isCurrent ? (state.prevSubmissionCache[cacheKey] || null) : null;
+
   const days = [];
   for (let d = 1; d <= daysInMonth; d++) {
     const dateKey = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const slotObj = getSlotForDate(y, m, d);
+    const isPast = isCurrent && dateKey < todayKey;
+    let slotObj;
+    if (isPast && prevSchedule) {
+      // 过去日期：沿用历史提交
+      const prevEntry = prevSchedule.find(e => e.date === dateKey);
+      slotObj = prevEntry
+        ? { type: prevEntry.slot || 'off', start: prevEntry.start || '', end: prevEntry.end || '' }
+        : { type: 'off', start: '', end: '' };
+    } else if (isPast) {
+      slotObj = { type: 'off', start: '', end: '' };
+    } else {
+      slotObj = getSlotForDate(y, m, d);
+    }
     days.push({ date: dateKey, slot: slotObj.type, start: slotObj.start, end: slotObj.end });
   }
+
+  // 备注（所有提交均读取，选填）
+  const noteEl = document.getElementById('emp-note-input');
+  const note = noteEl ? noteEl.value.trim() : '';
+
   return {
     name: state.settings.name,
     year: y,
     month: m,
     submittedAt: new Date().toISOString(),
-    schedule: days
+    schedule: days,
+    ...(note ? { note } : {})
   };
 }
 
 function openSubmitConfirm() {
   if (!state.rosterMonth) {
-    alert(getLang()==='en' ? 'Please generate your availability first.' : '请先生成班表再提交。');
+    alert(t('submit_no_roster'));
     return;
   }
   if (!state.settings.name || state.settings.name === '某某') {
-    alert(getLang()==='en' ? 'Please enter your name in the Calendar tab before submitting.' : '请先在日历页左上角填写名称，再提交班表。');
-    showView('calendar');
-    document.getElementById('s-name').focus();
+    alert(t('submit_no_login'));
     return;
   }
-  const { year: y, month: m } = state.rosterMonth;
-  const monthNames = getLang()==='en' ? t('cal_months') : ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-  document.getElementById('submit-modal-body').textContent = getLang()==='en'
-    ? `Submit ${state.settings.name}'s availability for ${monthNames[m-1]} ${y} to the manager? They will use this to arrange your schedule.`
-    : `确认将 ${state.settings.name} 的 ${y}年${monthNames[m-1]} 可工作时段提交给管理员吗？提交后管理员将根据此信息安排上班时间。`;
+  const { year: y, month: m, mode } = state.rosterMonth;
+  const monthNames = t('cal_months');
+  const isCurrent = mode === 'current';
+  const bodyText = getLang() === 'en'
+    ? `Submit ${state.settings.name}'s availability for ${monthNames[m-1]} ${y} to the manager?${isCurrent ? ' Past dates carry over from your last submission.' : ''}`
+    : `确认将 ${state.settings.name} 的 ${y}年${monthNames[m-1]} 可工作时段提交给管理员吗？提交后管理员将根据此信息安排上班时间。${isCurrent ? '（本月：今天之前日期将沿用历史记录，今天及之后日期以当前填写为准）' : ''}`;
+  document.getElementById('submit-modal-body').textContent = bodyText;
   document.getElementById('submit-modal').classList.add('open');
   document.getElementById('confirm-submit-btn').disabled = false;
 }
@@ -1267,7 +1584,7 @@ async function doSubmit() {
 
   const btn = document.getElementById('confirm-submit-btn');
   btn.disabled = true;
-  btn.textContent = getLang()==='en' ? 'Submitting…' : '提交中…';
+  btn.textContent = t('submit_submitting');
 
   const statusEl = document.getElementById('submit-status');
 
@@ -1275,30 +1592,38 @@ async function doSubmit() {
   if (BACKEND_MODE === 'gas' && (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('YOUR_APPS_SCRIPT'))) {
     closeSubmitModal();
     statusEl.className = 'submit-status error';
-    statusEl.textContent = getLang()==='en' ? '⚠️ Backend not configured. Please contact your manager.' : '⚠️ 尚未配置 Google Sheets 连接。请联系管理员设置后端接口。';
+    statusEl.textContent = t('submit_no_backend');
     btn.disabled = false;
-    btn.textContent = t('app_submit_confirm_btn');
+    btn.textContent = t('submit_confirm_btn');
     return;
   }
 
   try {
     statusEl.className = 'submit-status loading';
-    statusEl.textContent = getLang()==='en' ? '⏳ Submitting, please wait…' : '⏳ 正在提交，请稍候…';
+    statusEl.textContent = t('submit_waiting');
 
     const result = await Backend.postSchedule(payload);
 
     closeSubmitModal();
     if (result && result.success === false) {
       statusEl.className = 'submit-status error';
-      statusEl.textContent = getLang()==='en' ? '❌ Submission failed: ' + (result.error || 'Unknown error') : '❌ 提交失败：' + (result.error || '未知错误');
+      statusEl.textContent = t('submit_fail', { error: result.error || t('unknown_error') });
       btn.disabled = false;
-      btn.textContent = t('app_submit_confirm_btn');
+      btn.textContent = t('submit_confirm_btn');
       return;
     }
     statusEl.className = 'submit-status success';
-    statusEl.textContent = getLang()==='en' ? '✅ Availability submitted! Your manager will use this to arrange your schedule.' : '✅ 班表已成功提交！管理员将在排班时参考您的可工作时段。';
+    statusEl.textContent = t('submit_success');
     document.getElementById('submit-btn').disabled = true;
 
+    // 提交成功后更新本地 prevSubmissionCache（本月提交后，此次 schedule 成为新的历史记录）
+    const cacheKey = `${payload.year}||${payload.month}`;
+    state.prevSubmissionCache[cacheKey] = payload.schedule;
+    // 清空备注框
+    const noteEl = document.getElementById('emp-note-input');
+    if (noteEl) noteEl.value = '';
+
+    // Save submission record locally
     localStorage.setItem('last_submit_' + payload.year + '_' + payload.month, JSON.stringify({
       name: payload.name,
       submittedAt: payload.submittedAt
@@ -1307,9 +1632,9 @@ async function doSubmit() {
   } catch(err) {
     closeSubmitModal();
     statusEl.className = 'submit-status error';
-    statusEl.textContent = getLang()==='en' ? '❌ Submission failed. Please check your connection and try again.' : '❌ 提交失败，请检查网络连接后重试。';
+    statusEl.textContent = t('submit_network_fail');
     btn.disabled = false;
-    btn.textContent = t('app_submit_confirm_btn');
+    btn.textContent = t('submit_confirm_btn');
   }
 }
 
@@ -1317,8 +1642,7 @@ async function doSubmit() {
 function buildRosterSVG() {
   if (!state.rosterMonth) return null;
   const { year: y, month: m } = state.rosterMonth;
-  const isEnSvg = getLang() === 'en';
-  const monthNames = isEnSvg ? t('cal_months') : ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
   const DAY_EN = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const MON_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -1349,11 +1673,7 @@ function buildRosterSVG() {
 
   svg += `<rect width="${W}" height="${H}" fill="#f0f2f6"/>`;
   svg += `<rect x="0" y="0" width="${W}" height="${TITLE_H}" fill="${headerBg}"/>`;
-  const _svgName = state.settings.name && state.settings.name !== '某某' ? state.settings.name : (isEnSvg ? 'Staff' : '某某');
-  const _svgTitle = isEnSvg
-    ? `${_svgName} · ${monthNames[m-1]} ${y} · Availability`
-    : `${_svgName} · ${y}年${monthNames[m-1]} · 可工作时段`;
-  svg += `<text x="${W/2}" y="${TITLE_H*0.68}" text-anchor="middle" fill="${headerText}" font-size="14" font-weight="bold">${_svgTitle}</text>`;
+  svg += `<text x="${W/2}" y="${TITLE_H*0.68}" text-anchor="middle" fill="${headerText}" font-size="14" font-weight="bold">${state.settings.name} · ${y}年${monthNames[m-1]} · 可工作时段</text>`;
 
   const tableY = TITLE_H;
   svg += `<rect x="0" y="${tableY}" width="${W}" height="${H - TITLE_H}" fill="none" stroke="${borderColor}" stroke-width="2"/>`;
@@ -1365,8 +1685,8 @@ function buildRosterSVG() {
     svg += `<rect x="0" y="${wy}" width="${W}" height="${HEAD_H}" fill="${headBg}"/>`;
     // 对角线
     svg += `<line x1="0" y1="${wy}" x2="${LABEL_W}" y2="${wy+HEAD_H}" stroke="#8090b0" stroke-width="1"/>`;
-    svg += `<text x="${LABEL_W-4}" y="${wy+11}" text-anchor="end" fill="#6070a0" font-size="8">${isEnSvg?'Date':'日期'}</text>`;
-    svg += `<text x="4" y="${wy+HEAD_H-5}" fill="#6070a0" font-size="8">${isEnSvg?'Name':'姓名'}</text>`;
+    svg += `<text x="${LABEL_W-4}" y="${wy+11}" text-anchor="end" fill="#6070a0" font-size="8">日期</text>`;
+    svg += `<text x="4" y="${wy+HEAD_H-5}" fill="#6070a0" font-size="8">姓名</text>`;
     week.forEach((d, i) => {
       const cx = LABEL_W + i * COL_W;
       const dateStr = d ? `${d}-${MON_EN[m-1]}-${String(y).slice(2)}` : '';
@@ -1382,11 +1702,11 @@ function buildRosterSVG() {
     // ── 时段行（单行）──
     const rowY = wy + HEAD_H;
     svg += `<rect x="0" y="${rowY}" width="${LABEL_W}" height="${ROW_H}" fill="${headBg}"/>`;
-    svg += `<text x="${LABEL_W/2}" y="${rowY + ROW_H*0.62}" text-anchor="middle" fill="#2d3f55" font-size="9" font-weight="bold">${isEnSvg?'Avail.':'时段'}</text>`;
+    svg += `<text x="${LABEL_W/2}" y="${rowY + ROW_H*0.62}" text-anchor="middle" fill="#2d3f55" font-size="9" font-weight="bold">时段</text>`;
 
     week.forEach((d, i) => {
       const cx = LABEL_W + i * COL_W;
-      const slot = d ? getSlotForDate(y, m, d) : null;
+      const slot = d ? getRosterSlotForDate(y, m, d) : null;
       const isOff = !slot || slot.type === 'off';
       if (slot && !isOff) {
         const dispType = slotDisplayType(slot);
@@ -1442,23 +1762,18 @@ function exportPNG() {
   const result = buildRosterSVG();
   if (!result) return;
   const { svg, W, H } = result;
-  const _expName = state.settings.name && state.settings.name !== '某某' ? state.settings.name : 'schedule';
-  const fname = getLang()==='en'
-    ? `Schedule_${_expName}_${state.rosterMonth.year}${String(state.rosterMonth.month).padStart(2,'0')}.png`
-    : `班表_${_expName}_${state.rosterMonth.year}${String(state.rosterMonth.month).padStart(2,'0')}.png`;
+  const fname = `班表_${state.settings.name}_${state.rosterMonth.year}${String(state.rosterMonth.month).padStart(2,'0')}.png`;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   if (isIOS) {
     const win = window.open('', '_blank');
-    if (!win) { alert(getLang()==='en' ? 'Please allow pop-ups in Safari settings.' : '请在 Safari 设置中允许弹出式窗口'); return; }
-    const genMsg = getLang()==='en' ? 'Generating…' : '生成中…';
-    win.document.write(`<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;}p{color:#ccc;font-size:13px;font-family:sans-serif;padding:14px;text-align:center;}</style></head><body><p>${genMsg}</p></body></html>`);
+    if (!win) { alert(t('export_safari_alert')); return; }
+    win.document.write('<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;}p{color:#ccc;font-size:13px;font-family:sans-serif;padding:14px;text-align:center;}</style></head><body><p>生成中…</p></body></html>');
     win.document.close();
     renderSVGToCanvas(svg, W, H, 2).then(canvas => {
       const dataURL = canvas.toDataURL('image/png');
-      const saveMsg = getLang()==='en' ? 'Long-press the image → Save to Photos' : '长按图片 → 存储到照片';
-      win.document.body.innerHTML = `<img src="${dataURL}"><p>${saveMsg}</p>`;
-    }).catch(() => { win.close(); alert(getLang()==='en' ? 'Export failed, please try again.' : '导出失败，请重试'); });
+      win.document.body.innerHTML = `<img src="${dataURL}"><p>${t('export_long_press')}</p>`;
+    }).catch(() => { win.close(); alert(t('export_fail')); });
   } else {
     renderSVGToCanvas(svg, W, H, 2).then(canvas => {
       const a = document.createElement('a');
@@ -1475,20 +1790,18 @@ function exportPDF() {
   const { svg, W, H } = result;
 
   const win = window.open('', '_blank');
-  if (!win) { alert(getLang()==='en' ? 'Please allow pop-ups in Safari settings.' : '请在 Safari 设置中允许弹出式窗口'); return; }
-  const genMsg2 = getLang()==='en' ? 'Generating…' : '生成中…';
-  win.document.write(`<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#fff;}p{font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;}</style></head><body><p>${genMsg2}</p></body></html>`);
+  if (!win) { alert(t('export_safari_alert')); return; }
+  win.document.write('<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><style>body{margin:0;background:#fff;}p{font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;}</style></head><body><p>生成中…</p></body></html>');
   win.document.close();
 
   renderSVGToCanvas(svg, W, H, 2).then(canvas => {
     const imgData = canvas.toDataURL('image/jpeg', 0.92);
-    const pdfHint = getLang()==='en'
-      ? 'Tap the Share button → Print → swipe up on the preview → Share → <b>Save as PDF</b>'
-      : '点右上角 <b>分享</b> → <b>打印</b> → 左下角预览图向上划 → 分享 → <b>存储为PDF</b>';
     win.document.body.innerHTML = `
-      <div style="font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;">${pdfHint}</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#666;text-align:center;padding:12px;background:#f5f5f5;">
+        点右上角 <b>分享</b> → <b>打印</b> → 左下角预览图向上划 → 分享 → <b>存储为PDF</b>
+      </div>
       <img src="${imgData}" style="width:100%;display:block;">`;
-  }).catch(() => { win.close(); alert(getLang()==='en' ? 'Export failed, please try again.' : '导出失败，请重试'); });
+  }).catch(() => { win.close(); alert(t('export_fail')); });
 }
 
 // ── THEMES ──
@@ -1519,32 +1832,93 @@ function applyTheme(name) {
   saveState();
 }
 
-// ── LANG CHANGE HOOK ──
-function onLangChanged(lang) {
-  applyI18n();
-  renderCalendar();
-  renderInlineSettings();
-  updateRulePreview();
-  if (state.rosterMonth) renderRoster();
+// ── 员工账号辅助（需在 INIT 前定义供 checkEmpSession 调用）──
+// 从服务器获取账号，同时缓存到 localStorage 作为快速恢复用
+async function fetchEmpAccounts() {
+  try {
+    const result = await Backend.getEmpAccounts();
+    if (result && result.accounts) {
+      localStorage.setItem('emp_accounts_v1', JSON.stringify(result.accounts));
+      return result.accounts;
+    }
+  } catch(e) {}
+  // fallback: 用本地缓存
+  return getLocalEmpAccounts();
+}
+function getLocalEmpAccounts() {
+  try {
+    const s = localStorage.getItem('emp_accounts_v1');
+    return s ? JSON.parse(s) : {};
+  } catch(e) { return {}; }
+}
+async function sha256Emp(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
 // ── INIT ──
 loadState();
-initCalendar();
-// Add lang switcher to nav
-(function() {
-  const navSw = document.getElementById('app-nav-lang-switch');
-  if (navSw) navSw.innerHTML = langSwitchHTML();
-})();
-applyI18n();
-renderCalendar();
-renderInlineSettings();
-setSlotMode('full');
-if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-  const tip = document.getElementById('ios-tip');
-  if (tip) tip.style.display = 'block';
+
+// 语言切换回调：切换语言时重新渲染动态内容
+function onLangChanged(lang) {
+  // 重新生成语言切换按钮（更新高亮状态）
+  initLangSwitchers();
+  // 更新 nav title
+  const name = state.settings.name;
+  if (name && name !== '某某') {
+    document.getElementById('nav-title').textContent = getLang() === 'en'
+      ? `${name}'s Schedule` : name + '的班表';
+  }
+  renderCalendar();
+  renderInlineSettings();
+  if (document.getElementById('view-roster').classList.contains('active')) {
+    renderRoster();
+  }
 }
-applyTheme('slate');
+
+// 初始化语言切换按钮（登录页 + 顶部导航各一个）
+function initLangSwitchers() {
+  const loginSw = document.getElementById('login-lang-switch');
+  if (loginSw) loginSw.innerHTML = langSwitchHTML();
+  const navSw = document.getElementById('nav-lang-switch');
+  if (navSw) navSw.innerHTML = langSwitchHTML();
+}
+
+// 检查是否已登录（session 存在且账号仍有效）
+(function checkEmpSession() {
+  // 初始化语言切换按钮
+  initLangSwitchers();
+  applyI18n();
+
+  const savedName = sessionStorage.getItem('emp_logged_in');
+  if (savedName) {
+    const accounts = getLocalEmpAccounts();
+    if (accounts[savedName]) {
+      // 恢复已登录状态
+      state.settings.name = savedName;
+      state.monthMode = getDefaultMonthMode();
+      saveState();
+      document.getElementById('emp-login-screen').style.display = 'none';
+      document.getElementById('main-app').style.display = 'block';
+      document.getElementById('nav-title').textContent = getLang() === 'en'
+        ? `${savedName}'s Schedule` : savedName + '的班表';
+      initCalendar();
+      updateMonthModeTabs();
+      renderCalendar();
+      renderInlineSettings();
+      setSlotMode('full');
+      if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        const tip = document.getElementById('ios-tip');
+        if (tip) tip.style.display = 'block';
+      }
+      applyTheme('slate');
+      return;
+    }
+  }
+  // 未登录：显示登录页
+  document.getElementById('emp-login-screen').style.display = 'flex';
+  document.getElementById('main-app').style.display = 'none';
+})();
 </script>
 <script>
 if ('serviceWorker' in navigator) {
@@ -1552,6 +1926,110 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+// ── 员工登录 ──────────────────────────────────────────────────────
+async function doEmpLogin() {
+  const nameVal = document.getElementById('emp-login-name').value.trim();
+  const pwVal   = document.getElementById('emp-login-pw').value;
+  const errEl   = document.getElementById('emp-login-error');
+  const btn     = document.getElementById('emp-login-btn');
+  errEl.textContent = '';
+  if (!nameVal) { errEl.textContent = t('emp_login_enter_name'); return; }
+  if (!pwVal)   { errEl.textContent = t('emp_login_enter_pw'); return; }
+
+  btn.disabled = true; btn.textContent = t('emp_login_verifying');
+  // 从服务器拉取最新账号数据（同时更新本地缓存）
+  const accounts = await fetchEmpAccounts();
+  const acct = accounts[nameVal];
+  if (!acct) {
+    errEl.textContent = t('emp_login_no_account');
+    btn.disabled = false; btn.textContent = t('emp_login_btn');
+    return;
+  }
+  const hash = await sha256Emp(pwVal);
+  if (hash !== acct.passwordHash) {
+    errEl.textContent = t('emp_login_wrong_pw');
+    btn.disabled = false; btn.textContent = t('emp_login_btn');
+    return;
+  }
+  // 登录成功
+  sessionStorage.setItem('emp_logged_in', nameVal);
+  state.settings.name = nameVal;
+  state.monthMode = getDefaultMonthMode();
+  saveState();
+  document.getElementById('emp-login-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  document.getElementById('nav-title').textContent = getLang() === 'en'
+    ? `${nameVal}'s Schedule` : nameVal + '的班表';
+  initCalendar();
+  updateMonthModeTabs();
+  renderCalendar();
+  renderInlineSettings();
+  applyI18n();
+  btn.disabled = false; btn.textContent = t('emp_login_btn');
+}
+
+function doEmpLogout() {
+  sessionStorage.removeItem('emp_logged_in');
+  state.monthMode = 'next';
+  state.prevSubmissionCache = {};
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('emp-login-screen').style.display = 'flex';
+  document.getElementById('emp-login-name').value = '';
+  document.getElementById('emp-login-pw').value = '';
+  document.getElementById('emp-login-error').textContent = '';
+}
+
+function openChangePwModal() {
+  document.getElementById('cpw-old').value = '';
+  document.getElementById('cpw-new').value = '';
+  document.getElementById('cpw-new2').value = '';
+  document.getElementById('cpw-error').textContent = '';
+  document.getElementById('changepw-modal').classList.add('open');
+}
+function closeChangePwModal() {
+  document.getElementById('changepw-modal').classList.remove('open');
+}
+
+async function doEmpChangePw() {
+  const name = state.settings.name;
+  const oldPw = document.getElementById('cpw-old').value;
+  const newPw  = document.getElementById('cpw-new').value;
+  const newPw2 = document.getElementById('cpw-new2').value;
+  const errEl  = document.getElementById('cpw-error');
+  errEl.textContent = '';
+
+  if (!oldPw || !newPw || !newPw2) { errEl.textContent = t('cpw_fill_all'); return; }
+  if (newPw.length < 4) { errEl.textContent = t('cpw_min4'); return; }
+  if (newPw !== newPw2) { errEl.textContent = t('cpw_mismatch'); return; }
+
+  const oldHash = await sha256Emp(oldPw);
+  const newHash = await sha256Emp(newPw);
+
+  // 先用本地缓存验证旧密码（快速反馈），再调服务器真正修改
+  const localAccounts = getLocalEmpAccounts();
+  const localAcct = localAccounts[name];
+  if (localAcct && oldHash !== localAcct.passwordHash) {
+    errEl.textContent = t('cpw_wrong_old');
+    return;
+  }
+
+  try {
+    const result = await Backend.changeEmpPassword(name, oldHash, newHash);
+    if (!result.success) {
+      errEl.textContent = result.error || t('unknown_error');
+      return;
+    }
+    // 成功：更新本地缓存
+    if (localAccounts[name]) localAccounts[name].passwordHash = newHash;
+    localStorage.setItem('emp_accounts_v1', JSON.stringify(localAccounts));
+    closeChangePwModal();
+    alert(t('cpw_success'));
+  } catch(e) {
+    errEl.textContent = getLang() === 'en' ? 'Network error, please try again later' : '网络错误，请稍后再试';
+  }
+}
 </script>
+</div><!-- #main-app -->
 </body>
 </html>
