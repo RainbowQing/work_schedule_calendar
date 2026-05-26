@@ -786,6 +786,9 @@ let appState = {
   submissionSnapshots: {},
   // 有更新标记：{ "year||month||name": true }
   submissionUpdated: {},
+  // 状态版本号：每次 persistData 写入前递增，loadPersistedData 读回时对比
+  // 只接受版本号 >= 内存版本的数据，防止旧数据覆盖新状态（竞态保护）
+  stateVersion: 0,
 };
 
 // ── SCHEDULE CACHE ────────────────────────────────────────────────
@@ -1076,6 +1079,14 @@ async function loadPersistedData() {
         state = backup;
       }
     }
+    // 版本号保护：如果读回来的版本比内存版本旧，说明有更新的 persistData 尚未写入完成
+    // 此时跳过覆盖，避免竞态导致新状态被旧数据覆盖
+    const incomingVersion = state.stateVersion || 0;
+    const memoryVersion   = appState.stateVersion || 0;
+    if (incomingVersion < memoryVersion) {
+      console.warn(`loadPersistedData: 跳过旧版本数据（服务器版本 ${incomingVersion} < 内存版本 ${memoryVersion}）`);
+      return;
+    }
     if (state.locationMap)   appState.locationMap   = state.locationMap;
     // 迁移：旧版 AdminState 含 schedules 字段 → 迁移到 scheduleCache（标记为已保存状态）
     if (state.schedules && typeof state.schedules === 'object') {
@@ -1115,6 +1126,8 @@ async function loadPersistedData() {
     if (state.submissionSnapshots)     appState.submissionSnapshots     = state.submissionSnapshots;
     if (state.submissionPrevSnapshots) appState.submissionPrevSnapshots = state.submissionPrevSnapshots;
     if (state.submissionUpdated)       appState.submissionUpdated       = state.submissionUpdated;
+    // 同步版本号：取服务器版本和内存版本中较大的，确保重启后版本号不回退
+    if (state.stateVersion) appState.stateVersion = Math.max(appState.stateVersion || 0, state.stateVersion);
     // 地点列表：优先从服务器加载，fallback 到 config.js 的 LOCATIONS
     if (state.locations && state.locations.length > 0) {
       appState.locations = state.locations;
@@ -1151,6 +1164,7 @@ function _buildAdminState() {
     submissionPrevSnapshots: appState.submissionPrevSnapshots || {},
     submissionUpdated:       appState.submissionUpdated,
     locations:               appState.locations,
+    stateVersion:            appState.stateVersion,
   };
 }
 
@@ -1162,6 +1176,8 @@ function _backupStateLocally(state) {
 }
 
 function persistData() {
+  // 每次调用立即递增版本号（在防抖延迟外），确保内存版本领先于任何正在进行的读取
+  appState.stateVersion = (appState.stateVersion || 0) + 1;
   clearTimeout(_persistTimer);
   _persistTimer = setTimeout(() => {
     const state = _buildAdminState();
@@ -1842,7 +1858,7 @@ function closeDelEmpModal() {
   _delEmpTarget = '';
 }
 
-// 离职：保留所有数据，只从显示列表中隐藏
+// 离职：保留有排班记录的月份数据，清理无排班记录的月份，并从显示列表中隐藏
 function deleteEmployeeResigned(name) {
   closeDelEmpModal();
   appState.resignedEmployees[name] = true;
@@ -1850,6 +1866,29 @@ function deleteEmployeeResigned(name) {
   delete appState.locationMap[name];
   delete appState.employeeAccounts[name];
   Backend.deleteEmpAccount(name).catch(e => console.warn('后端删除账号失败:', e));
+
+  // 清理 scheduleCache 中该员工无排班记录的月份
+  // 有实际排班的月份（历史已确认班次）保留，空月份数据从缓存中清除并同步后台
+  for (const [key, data] of Object.entries(scheduleCache)) {
+    const hasSchedule = Object.values(data.days || {}).some(arr => arr.includes(name));
+    if (!hasSchedule) {
+      // 该员工在这个地点+月份没有任何排班记录，无需保留
+      // 从 days 里的每个 slot 移除该员工名字（理论上已无，防御性清理）
+      for (const slotKey of Object.keys(data.days || {})) {
+        data.days[slotKey] = data.days[slotKey].filter(n => n !== name);
+      }
+      // 如果整个月的排班表是空的（其他人也没排班），不需要额外保存
+      // 如果还有其他人的排班，保存一次确保后台同步
+      const parts = key.split('||');
+      if (parts.length >= 3) {
+        const month = parseInt(parts[parts.length - 1]);
+        const year  = parseInt(parts[parts.length - 2]);
+        const loc   = parts.slice(0, parts.length - 2).join('||');
+        saveScheduleToServer(loc, year, month).catch(e => console.warn('保存排班表失败:', e));
+      }
+    }
+  }
+
   persistData();
   renderLocationTab();
   renderScheduleGrid();
@@ -2987,9 +3026,11 @@ function renderScheduleGrid() {
             const empStart = fmtTime(empStartRaw) || empStartRaw;
             const empEnd   = fmtTime(empEndRaw)   || empEndRaw;
 
-            // 时间改动标注：判断管理员覆盖是否超出员工原始填写范围
-            const empOrigStart = empDay && empDay.start ? empDay.start : '';
-            const empOrigEnd   = empDay && empDay.end   ? empDay.end   : '';
+            // 员工原始提交时间（不经过地点默认时间截取），用于 tooltip 显示和改动标注
+            const rawSub = getMonthSubs(year, month).find(s => s.name === name);
+            const rawDay = rawSub && rawSub.schedule ? rawSub.schedule.find(e => e.date === dateKey) : null;
+            const empOrigStart = rawDay && rawDay.start ? rawDay.start : '';
+            const empOrigEnd   = rawDay && rawDay.end   ? rawDay.end   : '';
             let startTimeWarn = false, endTimeWarn = false;
             if (timeOv.start && empOrigStart) {
               startTimeWarn = timeToMinsAdm(timeOv.start) < timeToMinsAdm(empOrigStart);
@@ -3098,7 +3139,8 @@ function renderScheduleGrid() {
               const isEn = getLang() === 'en';
               // tooltip 优先级：未提交 > 他处排班 > 休息 > 已排班(confirmed/未confirmed) > 可用未排班
               function _tip(slot) {
-                const raw = slot === 'start' ? empStart : empEnd;
+                // tooltip 始终显示员工原始提交时间，不受地点默认时间截取或管理员覆盖影响
+                const rawOrig = slot === 'start' ? (empOrigStart ? fmtTime(empOrigStart) || empOrigStart : '') : (empOrigEnd ? fmtTime(empOrigEnd) || empOrigEnd : '');
                 if (!hasSubmitted && !isChecked)
                   return isEn ? `${name}: not submitted` : `${name}：尚未提交班表`;
                 if (elsewhere)
@@ -3107,12 +3149,12 @@ function renderScheduleGrid() {
                   return isEn ? `${name}: not available that day (rest day)` : `${name}：当天不可工作（休息）`;
                 if (isChecked)
                   return confirmed
-                    ? (isEn ? `${name} ${slot} ${raw||'—'} · week confirmed (locked)` : `${name} ${slot==='start'?'起始':'结束'} ${raw||'未填'} · 班次已确认（锁定）`)
-                    : (isEn ? `${name} ${slot} ${raw||'—'} · click to deselect; dbl-click to edit` : `${name} ${slot==='start'?'起始':'结束'} ${raw||'未填'}（单击取消；双击改时间）`);
+                    ? (isEn ? `${name} ${slot} ${rawOrig||'—'} · week confirmed (locked)` : `${name} ${slot==='start'?'起始':'结束'} ${rawOrig||'未填'} · 班次已确认（锁定）`)
+                    : (isEn ? `${name} ${slot} ${rawOrig||'—'} · click to deselect; dbl-click to edit` : `${name} ${slot==='start'?'起始':'结束'} ${rawOrig||'未填'}（单击取消；双击改时间）`);
                 // 可用但未排班
                 return isEn
-                  ? `${name}: submitted ${slot==='start'?'start':'end'} ${raw||'—'}`
-                  : `${name}：员工提交${slot==='start'?'开始':'结束'}时间 ${raw||'未填'}`;
+                  ? `${name}: submitted ${slot==='start'?'start':'end'} ${rawOrig||'—'}`
+                  : `${name}：员工提交${slot==='start'?'开始':'结束'}时间 ${rawOrig||'未填'}`;
               }
               const titleStart = _tip('start');
               const titleEnd   = _tip('end');
