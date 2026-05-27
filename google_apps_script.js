@@ -298,7 +298,27 @@ function doPost(e) {
       const { adminId, shared, partition } = data;
       if (!adminId) return jsonResponse({ success: false, error: 'Missing adminId' });
       if (shared) {
-        writeSharedState(shared);
+        const existing = readSharedState();
+        // merge locationMap：只覆盖当前管理员管理的地点
+        const myLocs = new Set((partition && partition.managedLocations) || []);
+        const mergedLocMap = Object.assign({}, existing.locationMap || {});
+        const incomingLocMap = shared.locationMap || {};
+        const allNames = new Set([...Object.keys(mergedLocMap), ...Object.keys(incomingLocMap)]);
+        for (const name of allNames) {
+          const existingEntry = mergedLocMap[name] || {};
+          const incomingEntry = incomingLocMap[name] || {};
+          const merged = Object.assign({}, existingEntry);
+          for (const loc of myLocs) {
+            if (incomingEntry[loc] !== undefined) {
+              merged[loc] = incomingEntry[loc];
+            } else {
+              delete merged[loc];
+            }
+          }
+          mergedLocMap[name] = merged;
+        }
+        const mergedShared = Object.assign({}, shared, { locationMap: mergedLocMap });
+        writeSharedState(mergedShared);
         if (shared.employeeAccounts) writeEmpAccounts(shared.employeeAccounts);
       }
       if (partition) {
@@ -432,13 +452,18 @@ function doGet(e) {
     if (!sheet) return jsonResponse({ submissions: [] });
     const rows = sheet.getDataRange().getValues();
     const submissions = [], prevMap = {};
+    function safeParseSchedule(raw) {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch(e) { return []; }
+    }
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       if (row[1] === year && row[2] === month) {
         if (row[3] === 'prev') {
-          prevMap[row[0]] = { schedule: JSON.parse(row[5] || '[]'), submittedAt: row[4] };
+          prevMap[row[0]] = { schedule: safeParseSchedule(row[5]), submittedAt: row[4] };
         } else {
-          const entry = { name: row[0], year: row[1], month: row[2], submittedAt: row[4], schedule: JSON.parse(row[5] || '[]') };
+          const entry = { name: row[0], year: row[1], month: row[2], submittedAt: row[4], schedule: safeParseSchedule(row[5]) };
           if (row[6]) entry.note = row[6];
           submissions.push(entry);
         }

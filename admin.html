@@ -370,7 +370,10 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
       💡 点击 ✓ 为员工标记工作地点（可多选）。修改后自动保存，并同步至排班系统。
     </div>
     <div class="card">
-      <div class="card-title" data-i18n="loc_table_title">员工工作地点标记</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="card-title" style="margin-bottom:0;" data-i18n="loc_table_title">员工工作地点标记</div>
+        <button class="btn btn-ghost btn-sm" onclick="refreshLocationData()" style="font-size:12px;">🔄 刷新</button>
+      </div>
       <div style="overflow-x:auto;">
         <table class="sub-table" id="loc-table">
           <thead>
@@ -1397,12 +1400,17 @@ async function fetchAndCacheSubs(year, month, silent) {
     if (data.submissions) {
       if (!appState.submissionPrevSnapshots) appState.submissionPrevSnapshots = {};
       const todayKey = getTodayKey();
-      data.submissions.forEach(s => {
+      for (const s of data.submissions) {
         const snapKey = `${year}||${month}||${s.name}`;
         const newSnap = JSON.stringify(s.schedule);
         const oldSnap = appState.submissionSnapshots[snapKey];
+        // 首次见到此员工此月的提交（无快照）→ 直接写入快照，不标已更新
+        if (oldSnap === undefined) {
+          appState.submissionSnapshots[snapKey] = newSnap;
+          continue;
+        }
 
-        if (oldSnap !== undefined && oldSnap !== newSnap) {
+        if (oldSnap !== newSnap) {
           // 检查"今天及以后"的日期是否有变化（过去日期的变化不触发已更新标记）
           const oldSched = JSON.parse(oldSnap) || [];
           const newSched = s.schedule || [];
@@ -1428,7 +1436,7 @@ async function fetchAndCacheSubs(year, month, silent) {
         if (!appState.submissionUpdated[snapKey]) {
           appState.submissionSnapshots[snapKey] = newSnap;
         }
-      });
+      }
       appState.submissions[`${year}||${month}`] = data.submissions;
       // 只把未离职的员工加入 allEmployees（已彻底删除的员工服务器上已无记录，不会出现在这里）
       data.submissions.forEach(s => {
@@ -1483,8 +1491,10 @@ function renderSubmissionsTable() {
     ? `${submittedCount} / ${allAccountNames.length} submitted`
     : `${submittedCount} / ${allAccountNames.length} 人已提交`;
 
+  const _myVisibleForNotice = new Set(getMyVisibleEmployees());
   const hasNew = appState.persistedLoaded && submittedSubs.some(s =>
     !appState.resignedEmployees[s.name] && !appState.permanentlyDeleted[s.name] &&
+    _myVisibleForNotice.has(s.name) &&
     (!appState.locationMap[s.name] || Object.keys(appState.locationMap[s.name]).length === 0));
   document.getElementById('new-employee-notice').style.display = hasNew ? 'block' : 'none';
 
@@ -1686,6 +1696,36 @@ function viewPersonDetail(name) {
   }
 }
 
+
+async function refreshLocationData() {
+  const btn = document.querySelector('#tab-locations .btn-ghost');
+  if (btn) { btn.disabled = true; btn.textContent = '刷新中…'; }
+  try {
+    const result = await Backend.getAdminState(appState.currentAdminId);
+    if (result && result.shared) {
+      // 重新加载 shared 数据（locationMap 等）
+      const s = result.shared;
+      if (s.locationMap)          appState.locationMap          = s.locationMap;
+      if (s.allEmployees)         appState.allEmployees         = s.allEmployees;
+      if (s.resignedEmployees)    appState.resignedEmployees    = s.resignedEmployees;
+      if (s.permanentlyDeleted)   appState.permanentlyDeleted   = s.permanentlyDeleted;
+      if (s.employeeAccounts)     appState.employeeAccounts     = s.employeeAccounts;
+      if (s.locations)            appState.locations            = s.locations;
+    }
+    // 同时刷新 allPartitions
+    const partResult = await Backend.getAllPartitions();
+    if (partResult && partResult.partitions) appState.allPartitions = partResult.partitions;
+    renderLocationTab();
+    const msg = document.getElementById('loc-save-msg');
+    msg.textContent = getLang() === 'en' ? '✓ Refreshed' : '✓ 已刷新';
+    clearTimeout(msg._t);
+    msg._t = setTimeout(() => { msg.textContent = ''; }, 2000);
+  } catch(e) {
+    console.error('刷新地点标记失败:', e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 刷新'; }
+  }
+}
 
 // ── LOCATION TAB ──
 function renderLocationTab() {
@@ -2206,17 +2246,65 @@ function countAssignedForSlot(loc, year, month, dateKey, slotType) {
   return (schedData.days[slotKey] || []).length;
 }
 
+// 跨管理员冲突检测缓存（其他管理员地点的排班数据，按需异步加载）
+const _crossAdminCache = {};
+
+// 预加载"共同管理员工所属的其他管理员地点"的当月排班数据
+async function _ensureCrossAdminCache(year, month) {
+  const adminId = appState.currentAdminId || '1';
+  const sharedNames = new Set(appState.managedEmployees || []);
+  const locsToFetch = new Set();
+  for (const [aid, p] of Object.entries(appState.allPartitions)) {
+    if (aid === adminId) continue;
+    const hasShared = (p.managedEmployees || []).some(n => sharedNames.has(n));
+    if (hasShared) {
+      (p.managedLocations || []).forEach(l => locsToFetch.add(l));
+    }
+  }
+  for (const otherLoc of locsToFetch) {
+    const cacheKey = `${otherLoc}||${year}||${month}`;
+    if (_crossAdminCache[cacheKey] || scheduleCache[cacheKey]) continue;
+    try {
+      const result = await Backend.getSchedule(otherLoc, year, month);
+      if (result && result.schedule) {
+        _crossAdminCache[cacheKey] = { loc: otherLoc, year, month, days: result.schedule.days || {} };
+      }
+    } catch(e) { /* 静默失败 */ }
+  }
+}
+
 // Check if a person is already working at a different location on a given date
 // (只看 start slot — 有 start 才代表真正被排班)
 function isPersonElsewhere(name, loc, year, month, dateKey) {
   return getPersonElsewhereLoc(name, loc, year, month, dateKey) !== null;
 }
 function getPersonElsewhereLoc(name, loc, year, month, dateKey) {
+  // 先查本地 scheduleCache（自己管理的地点已缓存）
   for (const [key, data] of Object.entries(scheduleCache)) {
     if (data.year !== year || data.month !== month || data.loc === loc) continue;
-    // 只检查 start slot，有 start 才算真正排班
     const startKey = `${dateKey}||start`;
     if ((data.days[startKey] || []).includes(name)) return data.loc;
+  }
+  // 再查跨管理员冲突：如果该员工同时被其他管理员管理，检查其他管理员的地点
+  const adminId = appState.currentAdminId || '1';
+  for (const [aid, p] of Object.entries(appState.allPartitions)) {
+    if (aid === adminId) continue;
+    if (!(p.managedEmployees || []).includes(name)) continue;
+    // 该员工也被其他管理员管理，检查其地点
+    for (const otherLoc of (p.managedLocations || [])) {
+      if (otherLoc === loc) continue;
+      const cacheKey = `${otherLoc}||${year}||${month}`;
+      if (scheduleCache[cacheKey]) {
+        // 已缓存，直接查
+        const startKey = `${dateKey}||start`;
+        if ((scheduleCache[cacheKey].days[startKey] || []).includes(name)) return otherLoc;
+      }
+      // 未缓存：查 _crossAdminCache（轻量异步预加载，见 _ensureCrossAdminCache）
+      if (_crossAdminCache[cacheKey]) {
+        const startKey = `${dateKey}||start`;
+        if ((_crossAdminCache[cacheKey].days[startKey] || []).includes(name)) return otherLoc;
+      }
+    }
   }
   return null;
 }
@@ -3041,10 +3129,22 @@ async function refreshScheduleGrid() {
 }
 
 let _schedGridCtxKey = null;
+let _schedGridRendering = false;
 function renderScheduleGrid() {
   const loc = document.getElementById('sched-location').value;
   const year = parseInt(document.getElementById('sched-year').value);
   const month = parseInt(document.getElementById('sched-month').value);
+  // 预加载跨管理员冲突数据（异步，完成后若视图未变则重渲一次）
+  if (!_schedGridRendering) {
+    _schedGridRendering = true;
+    _ensureCrossAdminCache(year, month).then(() => {
+      _schedGridRendering = false;
+      const curLoc = document.getElementById('sched-location') && document.getElementById('sched-location').value;
+      const curYear = parseInt(document.getElementById('sched-year') && document.getElementById('sched-year').value);
+      const curMonth = parseInt(document.getElementById('sched-month') && document.getElementById('sched-month').value);
+      if (curLoc === loc && curYear === year && curMonth === month) renderScheduleGrid();
+    }).catch(() => { _schedGridRendering = false; });
+  }
   updateMonthBadge(year, month);
   // 切换地点或月份时清空撤销栈
   const ctxKey = `${loc}||${year}||${month}`;
