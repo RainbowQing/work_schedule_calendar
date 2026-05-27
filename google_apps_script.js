@@ -299,7 +299,29 @@ function doPost(e) {
       if (!adminId) return jsonResponse({ success: false, error: 'Missing adminId' });
       if (shared) {
         const existing = readSharedState();
-        // merge locationMap：只覆盖当前管理员管理的地点
+        // ── shared 字段全量 merge：以 existing 为基础，incoming 只补充/更新，不删除 ──
+        // allEmployees：合并（existing + incoming，取并集）
+        const mergedAllEmp = Object.assign({}, existing.allEmployees || {}, shared.allEmployees || {});
+        // resignedEmployees：合并
+        const mergedResigned = Object.assign({}, existing.resignedEmployees || {}, shared.resignedEmployees || {});
+        // permanentlyDeleted：合并
+        const mergedDeleted = Object.assign({}, existing.permanentlyDeleted || {}, shared.permanentlyDeleted || {});
+        // employeeAccounts：合并（incoming 优先，保留 existing 里 incoming 没有的）
+        const mergedEmpAccounts = Object.assign({}, existing.employeeAccounts || {}, shared.employeeAccounts || {});
+        // locations：取并集（保留所有地点）
+        const existingLocs = existing.locations || [];
+        const incomingLocs = shared.locations || [];
+        const mergedLocs = [...new Set([...existingLocs, ...incomingLocs])];
+        // confirmedWeeks：合并
+        const mergedConfirmed = Object.assign({}, existing.confirmedWeeks || {}, shared.confirmedWeeks || {});
+        // slotLimits：合并
+        const mergedSlotLimits = Object.assign({}, existing.slotLimits || {}, shared.slotLimits || {});
+        // locSettings：合并
+        const mergedLocSettings = Object.assign({}, existing.locSettings || {}, shared.locSettings || {});
+        // submissions：合并（按 year||month key）
+        const mergedSubmissions = Object.assign({}, existing.submissions || {}, shared.submissions || {});
+
+        // locationMap：只覆盖当前管理员管理的地点列
         const myLocs = new Set((partition && partition.managedLocations) || []);
         const mergedLocMap = Object.assign({}, existing.locationMap || {});
         const incomingLocMap = shared.locationMap || {};
@@ -310,9 +332,21 @@ function doPost(e) {
             mergedLocMap[name][loc] = incomingEntry[loc] !== undefined ? incomingEntry[loc] : 0;
           }
         }
-        const mergedShared = Object.assign({}, shared, { locationMap: mergedLocMap });
+
+        const mergedShared = {
+          allEmployees:       mergedAllEmp,
+          resignedEmployees:  mergedResigned,
+          permanentlyDeleted: mergedDeleted,
+          employeeAccounts:   mergedEmpAccounts,
+          locations:          mergedLocs,
+          confirmedWeeks:     mergedConfirmed,
+          slotLimits:         mergedSlotLimits,
+          locSettings:        mergedLocSettings,
+          submissions:        mergedSubmissions,
+          locationMap:        mergedLocMap,
+        };
         writeSharedState(mergedShared);
-        if (shared.employeeAccounts) writeEmpAccounts(shared.employeeAccounts);
+        writeEmpAccounts(mergedEmpAccounts);
       }
       if (partition) {
         writePartitionState(adminId, partition);

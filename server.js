@@ -420,28 +420,45 @@ app.post('/api', (req, res) => {
       if (!adminId) return res.status(400).json({ success: false, error: 'Missing adminId' });
 
       const doSave = db.transaction(() => {
-        // 写共享数据（locationMap 做 merge，只覆盖当前管理员管理的地点）
+        // ── shared 字段全量 merge：以 existing 为基础，incoming 只补充/更新 ──
         if (shared) {
           const existing = readSharedState();
-          // 获取该管理员当前的 managedLocations（从新 partition 或旧 partition 中取）
+          const mergedAllEmp      = Object.assign({}, existing.allEmployees || {}, shared.allEmployees || {});
+          const mergedResigned    = Object.assign({}, existing.resignedEmployees || {}, shared.resignedEmployees || {});
+          const mergedDeleted     = Object.assign({}, existing.permanentlyDeleted || {}, shared.permanentlyDeleted || {});
+          const mergedEmpAccounts = Object.assign({}, existing.employeeAccounts || {}, shared.employeeAccounts || {});
+          const mergedLocs        = [...new Set([...(existing.locations || []), ...(shared.locations || [])])];
+          const mergedConfirmed   = Object.assign({}, existing.confirmedWeeks || {}, shared.confirmedWeeks || {});
+          const mergedSlotLimits  = Object.assign({}, existing.slotLimits || {}, shared.slotLimits || {});
+          const mergedLocSettings = Object.assign({}, existing.locSettings || {}, shared.locSettings || {});
+          const mergedSubmissions = Object.assign({}, existing.submissions || {}, shared.submissions || {});
+
+          // locationMap：只覆盖当前管理员管理的地点列
           const myLocs = new Set((partition && partition.managedLocations) || []);
-          // merge locationMap：只更新 myLocs 涉及的列，其余保持原样
           const mergedLocMap = Object.assign({}, existing.locationMap || {});
           const incomingLocMap = shared.locationMap || {};
-          // 遍历所有员工
-          // 完整总表 merge：对 incoming 里的每个员工，直接用 incoming 的值覆盖 myLocs 列
-          // incoming 值为 0 表示取消标记，为 adminId 表示有标记，其他列保持不变
           for (const name of Object.keys(incomingLocMap)) {
             if (!mergedLocMap[name]) mergedLocMap[name] = {};
             const incomingEntry = incomingLocMap[name] || {};
             for (const loc of myLocs) {
-              // 直接覆盖（0 或 adminId），其他管理员的地点列不动
               mergedLocMap[name][loc] = incomingEntry[loc] !== undefined ? incomingEntry[loc] : 0;
             }
           }
-          const mergedShared = Object.assign({}, shared, { locationMap: mergedLocMap });
+
+          const mergedShared = {
+            allEmployees:       mergedAllEmp,
+            resignedEmployees:  mergedResigned,
+            permanentlyDeleted: mergedDeleted,
+            employeeAccounts:   mergedEmpAccounts,
+            locations:          mergedLocs,
+            confirmedWeeks:     mergedConfirmed,
+            slotLimits:         mergedSlotLimits,
+            locSettings:        mergedLocSettings,
+            submissions:        mergedSubmissions,
+            locationMap:        mergedLocMap,
+          };
           writeSharedState(mergedShared);
-          if (shared.employeeAccounts) saveEmpAccounts(shared.employeeAccounts);
+          saveEmpAccounts(mergedEmpAccounts);
         }
         // 写该管理员的分区数据
         if (partition) {
