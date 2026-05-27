@@ -813,6 +813,33 @@ let appState = {
   allPartitions: {},        // 所有管理员的分区摘要 { "1": { managedLocations, managedEmployees }, ... }
 };
 
+// ── LOCATION MAP 完整总表维护 ─────────────────────────────────────
+function ensureLocationMapComplete() {
+  const locs = getLocations();
+  // 所有在职员工（employeeAccounts + allEmployees，排除离职/永久删除）
+  const names = new Set([
+    ...Object.keys(appState.employeeAccounts || {}),
+    ...Object.keys(appState.allEmployees || {}),
+  ]);
+  for (const name of names) {
+    if (appState.permanentlyDeleted[name] || appState.resignedEmployees[name]) continue;
+    if (!appState.locationMap[name]) appState.locationMap[name] = {};
+    for (const loc of locs) {
+      if (appState.locationMap[name][loc] === undefined) {
+        appState.locationMap[name][loc] = 0;
+      }
+    }
+  }
+  // 删除地点时，清掉所有员工该列（值为 0 或已删地点的标记）
+  for (const name of Object.keys(appState.locationMap)) {
+    for (const loc of Object.keys(appState.locationMap[name])) {
+      if (!locs.includes(loc)) {
+        delete appState.locationMap[name][loc];
+      }
+    }
+  }
+}
+
 // ── MULTI-ADMIN HELPERS ───────────────────────────────────────────
 function getUnclaimedEmployees() {
   // Employees not claimed by any admin
@@ -1114,6 +1141,7 @@ function initApp() {
   showLoading(true);
   loadPersistedData().then(async () => {
     appState.persistedLoaded = true;
+    ensureLocationMapComplete();
     refreshLocationUI(); // 用加载后的地点列表刷新所有 UI
     renderLocationTab();
     // 并行拉取所有地点的 focus month 排班表
@@ -1513,7 +1541,7 @@ function renderSubmissionsTable() {
     const hasAccount = !!appState.employeeAccounts[name];
     const isUnsubmitted = !s;
     const isUpdated = !isUnsubmitted && !!appState.submissionUpdated[snapKey];
-    const isNoLoc = s && !appState.resignedEmployees[name] && (!appState.locationMap[name] || Object.keys(appState.locationMap[name]).length === 0);
+    const isNoLoc = s && !appState.resignedEmployees[name] && (!appState.locationMap[name] || !Object.values(appState.locationMap[name]).some(v => v !== 0));
 
     // 姓名列徽章
     let badge = '';
@@ -1758,15 +1786,17 @@ async function refreshLocationData() {
 
 // ── LOCATION TAB ──
 function renderLocationTab() {
-  // 显示所有曾经提交过班表的员工（allEmployees），以及 locationMap 中已有记录的员工
-  // 这样即使切换到新的月份，旧员工的地点标记依然可见可编辑
+  // 员工来源：employeeAccounts + allEmployees（不再依赖提交记录）
+  // 管理员创建员工账号后即可出现在地点标记表里
+  ensureLocationMapComplete();
   const nameSet = new Set([
-    ...Object.keys(appState.allEmployees),
+    ...Object.keys(appState.employeeAccounts || {}),
+    ...Object.keys(appState.allEmployees || {}),
     ...Object.keys(appState.locationMap),
   ]);
-  // 过滤已离职员工（不在地点标记中显示），只显示当前管理员可见员工
+  // 过滤已离职员工，只显示当前管理员可见员工
   const _myVisible = new Set(getMyVisibleEmployees());
-  const names = [...nameSet].filter(n => !appState.resignedEmployees[n] && _myVisible.has(n)).sort();
+  const names = [...nameSet].filter(n => !appState.resignedEmployees[n] && !appState.permanentlyDeleted[n] && _myVisible.has(n)).sort();
   const tbody = document.getElementById('loc-tbody');
   const locs = getLocations();
   const colSpan = locs.length + 1;
@@ -1783,7 +1813,7 @@ function renderLocationTab() {
     const assigned = Object.keys(locObj);
     const cells = locs.map((loc,i) => {
       const owner = locObj[loc];
-      const isActive = owner !== undefined;
+      const isActive = owner !== undefined && owner !== 0;
       const iMyLoc = (appState.managedLocations || []).includes(loc);
       let colorClass = 'inactive';
       let cellStyle = '';
@@ -1813,7 +1843,7 @@ function renderLocationTab() {
         <button class="loc-tag ${colorClass}"${cellStyle} ${onclickAttr} ${titleAttr}>${isActive?'✓':'+'}</button>
       </td>`;
     }).join('');
-    const isNew = assigned.length === 0;
+    const isNew = !Object.values(locObj).some(v => v !== 0);
     return `<tr>
       <td class="name-cell">${name}${isNew?`<span class="new-badge">${getLang()==='en'?'Unassigned':'未标记'}</span>`:''}</td>${cells}</tr>`;
   }).join('');
@@ -1832,10 +1862,10 @@ function toggleLocation(name, loc) {
   if (!appState.locationMap[name]) appState.locationMap[name] = {};
   const currentOwner = appState.locationMap[name][loc];
   // 不能操作别人标记的地点
-  if (currentOwner && currentOwner !== adminId) return;
+  if (currentOwner && currentOwner !== 0 && currentOwner !== adminId) return;
   if (currentOwner === adminId) {
-    // 取消自己的标记
-    delete appState.locationMap[name][loc];
+    // 取消自己的标记（写 0，保持总表完整）
+    appState.locationMap[name][loc] = 0;
     // 清除该员工在该地点所有月份的排班
     for (const [key, data] of Object.entries(scheduleCache)) {
       if (data.loc !== loc) continue;
@@ -1944,6 +1974,7 @@ function addLocation() {
   const locs = getLocations();
   if (locs.includes(name)) { alert(getLang()==='en' ? `Location "${name}" already exists` : `地点"${name}"已存在`); return; }
   appState.locations = [...locs, name];
+  ensureLocationMapComplete();
   inp.value = '';
   persistData();
   refreshLocationUI();
@@ -1955,7 +1986,7 @@ function deleteLocation(loc) {
   const locs = getLocations();
   if (!locs.includes(loc)) return;
   // 检查是否有员工在此地点
-  const hasAssigned = Object.values(appState.locationMap).some(locObj => locObj && locObj[loc] !== undefined);
+  const hasAssigned = Object.values(appState.locationMap).some(locObj => locObj && locObj[loc] !== undefined && locObj[loc] !== 0);
   const hasSchedule = Object.values(scheduleCache).some(d => d.loc === loc && Object.values(d.days).some(arr => arr.length > 0));
   if (hasAssigned || hasSchedule) {
     if (!confirm(getLang()==='en' ? `Location "${loc}" still has staff assignments or schedule data. All related data will be removed. Continue?` : `地点"${loc}"仍有员工标记或排班数据，删除后相关数据也会清除，确定继续吗？`)) return;
@@ -1971,6 +2002,7 @@ function deleteLocation(loc) {
     if (!confirm(getLang()==='en' ? `Delete location "${loc}"?` : `确定删除地点"${loc}"吗？`)) return;
   }
   appState.locations = locs.filter(l => l !== loc);
+  ensureLocationMapComplete();
   // 清除该地点的设置
   if (appState.locSettings) delete appState.locSettings[loc];
   persistData();
@@ -2004,7 +2036,7 @@ function renderEmpMgmt() {
     </tr></thead>
     <tbody>${names.map(name => {
       const locObj = appState.locationMap[name] || {};
-      const locs = Object.keys(locObj);
+      const locs = Object.keys(locObj).filter(l => locObj[l] !== 0);
       const locStr = locs.length ? locs.join('、') : `<span style="color:#aaa;">${t('emp_mgmt_no_loc')}</span>`;
       const hasAccount = !!appState.employeeAccounts[name];
       const accountBadge = hasAccount
@@ -2107,6 +2139,7 @@ async function createNewEmployee() {
   const hash = await getDefaultEmpPwHash();
   appState.employeeAccounts[name] = { passwordHash: hash };
   appState.allEmployees[name] = true;
+  ensureLocationMapComplete();
   inp.value = '';
   persistData(); // persistData 内部会同步 localStorage 并调用后端保存
   // 同时通知后端单独创建账号（saveAdminState 已包含 employeeAccounts，这里只是冗余保障）
@@ -3128,7 +3161,7 @@ function getEligibleEmployees(loc, year, month) {
   const ov = appState.empOverrides[overKey] || { added:[], removed:[] };
   // base list from locationMap（标记了该地点的员工），包括所有被标记的员工（含未提交班表的）
   let base = Object.entries(appState.locationMap)
-    .filter(([n, locObj]) => locObj && locObj[loc] !== undefined)
+    .filter(([n, locObj]) => locObj && locObj[loc] !== undefined && locObj[loc] !== 0)
     .map(([n]) => n);
   // 补充：把该月已有排班记录的人也加进来（即使员工已被删除或本月未提交，历史/确认班次仍需显示）
   const schedData = getSchedData(loc, year, month);
@@ -3233,7 +3266,7 @@ function renderScheduleGrid() {
 
   const noticeEl = document.getElementById('sched-notice');
   // 判断该地点是否从未有人被标记（与月份无关）
-  const anyMarkedToLoc = Object.values(appState.locationMap).some(locObj => locObj && locObj[loc] !== undefined);
+  const anyMarkedToLoc = Object.values(appState.locationMap).some(locObj => locObj && locObj[loc] !== undefined && locObj[loc] !== 0);
   if (!anyMarkedToLoc) {
     noticeEl.style.display = 'block';
     noticeEl.textContent = `⚠️ ${t('sched_no_loc_notice', {loc})}`;

@@ -303,19 +303,12 @@ function doPost(e) {
         const myLocs = new Set((partition && partition.managedLocations) || []);
         const mergedLocMap = Object.assign({}, existing.locationMap || {});
         const incomingLocMap = shared.locationMap || {};
-        const allNames = new Set([...Object.keys(mergedLocMap), ...Object.keys(incomingLocMap)]);
-        for (const name of allNames) {
-          const existingEntry = mergedLocMap[name] || {};
+        for (const name of Object.keys(incomingLocMap)) {
+          if (!mergedLocMap[name]) mergedLocMap[name] = {};
           const incomingEntry = incomingLocMap[name] || {};
-          const merged = Object.assign({}, existingEntry);
           for (const loc of myLocs) {
-            if (incomingEntry[loc] !== undefined) {
-              merged[loc] = incomingEntry[loc];
-            } else {
-              delete merged[loc];
-            }
+            mergedLocMap[name][loc] = incomingEntry[loc] !== undefined ? incomingEntry[loc] : 0;
           }
-          mergedLocMap[name] = merged;
         }
         const mergedShared = Object.assign({}, shared, { locationMap: mergedLocMap });
         writeSharedState(mergedShared);

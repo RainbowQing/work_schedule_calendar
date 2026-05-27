@@ -429,21 +429,15 @@ app.post('/api', (req, res) => {
           const mergedLocMap = Object.assign({}, existing.locationMap || {});
           const incomingLocMap = shared.locationMap || {};
           // 遍历所有员工
-          const allNames = new Set([...Object.keys(mergedLocMap), ...Object.keys(incomingLocMap)]);
-          for (const name of allNames) {
-            const existingEntry = mergedLocMap[name] || {};
+          // 完整总表 merge：对 incoming 里的每个员工，直接用 incoming 的值覆盖 myLocs 列
+          // incoming 值为 0 表示取消标记，为 adminId 表示有标记，其他列保持不变
+          for (const name of Object.keys(incomingLocMap)) {
+            if (!mergedLocMap[name]) mergedLocMap[name] = {};
             const incomingEntry = incomingLocMap[name] || {};
-            const merged = Object.assign({}, existingEntry);
-            // 只处理 myLocs 里的地点
             for (const loc of myLocs) {
-              if (incomingEntry[loc] !== undefined) {
-                merged[loc] = incomingEntry[loc];
-              } else {
-                // 当前管理员的地点在 incoming 里不存在 = 取消标记
-                delete merged[loc];
-              }
+              // 直接覆盖（0 或 adminId），其他管理员的地点列不动
+              mergedLocMap[name][loc] = incomingEntry[loc] !== undefined ? incomingEntry[loc] : 0;
             }
-            mergedLocMap[name] = merged;
           }
           const mergedShared = Object.assign({}, shared, { locationMap: mergedLocMap });
           writeSharedState(mergedShared);
