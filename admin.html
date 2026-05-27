@@ -372,7 +372,11 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <div class="card-title" style="margin-bottom:0;" data-i18n="loc_table_title">员工工作地点标记</div>
-        <button class="btn btn-ghost btn-sm" onclick="refreshLocationData()" style="font-size:12px;">🔄 刷新</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span id="loc-unsaved-hint" style="font-size:11px;color:#e67e22;display:none;">● 有未保存更改</span>
+          <button class="btn btn-ghost btn-sm" onclick="refreshLocationData()" style="font-size:12px;">🔄 刷新</button>
+          <button class="btn btn-sm" id="loc-save-btn" onclick="saveLocationData()" style="font-size:12px;background:#1c4f80;color:#fff;border:none;">💾 保存标记</button>
+        </div>
       </div>
       <div style="overflow-x:auto;">
         <table class="sub-table" id="loc-table">
@@ -1697,6 +1701,31 @@ function viewPersonDetail(name) {
 }
 
 
+async function saveLocationData() {
+  const btn = document.getElementById('loc-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '保存中…'; }
+  try {
+    const adminId = appState.currentAdminId;
+    if (!adminId) return;
+    const shared    = _buildSharedState();
+    const partition = _buildPartitionState();
+    _backupStateLocally({ shared, partition });
+    await Backend.saveAdminState({ adminId, shared, partition });
+    const hint = document.getElementById('loc-unsaved-hint');
+    if (hint) hint.style.display = 'none';
+    const msg = document.getElementById('loc-save-msg');
+    msg.textContent = getLang() === 'en' ? '✓ Saved successfully' : '✓ 已保存，其他管理员点刷新可见';
+    clearTimeout(msg._t);
+    msg._t = setTimeout(() => { msg.textContent = ''; }, 3000);
+  } catch(e) {
+    const msg = document.getElementById('loc-save-msg');
+    msg.textContent = getLang() === 'en' ? '✗ Save failed, please retry' : '✗ 保存失败，请重试';
+    console.error('保存地点标记失败:', e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 保存标记'; }
+  }
+}
+
 async function refreshLocationData() {
   const btn = document.querySelector('#tab-locations .btn-ghost');
   if (btn) { btn.disabled = true; btn.textContent = '刷新中…'; }
@@ -1818,15 +1847,11 @@ function toggleLocation(name, loc) {
     // 添加标记
     appState.locationMap[name][loc] = adminId;
   }
-  // Auto-save and sync to schedule
-  persistData();
+  // 标记有未保存更改，提示用户点保存
+  const hint = document.getElementById('loc-unsaved-hint');
+  if (hint) hint.style.display = 'inline';
   renderLocationTab();
   renderScheduleGrid();
-  // Show brief confirmation
-  const msg = document.getElementById('loc-save-msg');
-  msg.textContent = getLang() === 'en' ? '✓ Auto-saved and synced' : '✓ 已自动保存并同步排班';
-  clearTimeout(msg._t);
-  msg._t = setTimeout(() => { msg.textContent = ''; }, 2000);
 }
 
 // ── 地点管理 ──────────────────────────────────────────────────────
