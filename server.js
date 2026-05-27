@@ -2,28 +2,42 @@
  * 本地 Node.js 后端服务器
  *
  * 提供与 Google Apps Script 相同的 REST 接口，数据存储为 SQLite 数据库。
- * 使用 better-sqlite3 实现并发安全的原子读写，解决多管理员同时操作时的数据覆盖问题。
+ * 使用 better-sqlite3 实现并发安全的原子读写。
+ * 支持多管理员账号（1/2/3），各管理员独立分区存储，共享排班数据。
  *
  * 使用步骤：
  * 1. 安装依赖：npm install
  * 2. 启动服务器：node server.js（或 npm start）
  * 3. 访问 http://localhost:3000/admin.html
  *
- * 数据存储在 ./data/schedule.db（单一 SQLite 文件），包含以下表：
- *   submissions    员工班表提交（按姓名+年+月+version 唯一）
- *   admin_state    管理员排班数据（单行 JSON blob）
- *   config         服务器配置（key-value）
- *   emp_accounts   员工账号（姓名 → 密码哈希）
- *   schedules      排班表（按地点+年+月唯一）
+ * 数据存储在 ./data/schedule.db，包含以下表：
+ *   submissions          员工班表提交（按姓名+年+月+version 唯一）
+ *   admin_state_shared   共享管理数据（locationMap、员工状态、地点配置等）
+ *   admin_state_partition 各管理员独立数据（managedLocations、empOrder 等），按 admin_id 分区
+ *   config               服务器配置（key-value），含 admin_accounts JSON
+ *   emp_accounts         员工账号（姓名 → 密码哈希）
+ *   schedules            排班表（按地点+年+月唯一）
  *
- * 从旧 JSON 文件迁移：首次启动时若 data/*.json 存在，自动导入后不再读取。
+ * 管理员账号存储在 config 表 key='admin_accounts'，值为：
+ *   { "1": { "passwordHash": "..." }, "2": {...}, "3": {...} }
+ * 忘记密码重置方法（以管理员2为例，重置为 123456）：
+ *   node -e "
+ *     const D=require('better-sqlite3')('./data/schedule.db');
+ *     const c=require('crypto');
+ *     const h=c.createHash('sha256').update('123456').digest('hex');
+ *     const row=D.prepare(\"SELECT value FROM config WHERE key='admin_accounts'\").get();
+ *     const accounts=row?JSON.parse(row.value):{};
+ *     accounts['2']={passwordHash:h};
+ *     D.prepare(\"INSERT OR REPLACE INTO config(key,value) VALUES('admin_accounts',?)\").run(JSON.stringify(accounts));
+ *     console.log('管理员2密码已重置为 123456');
+ *   "
  */
 
-const express = require('express');
-const cors    = require('cors');
-const fs      = require('fs');
-const path    = require('path');
-const crypto  = require('crypto');
+const express  = require('express');
+const cors     = require('cors');
+const fs       = require('fs');
+const path     = require('path');
+const crypto   = require('crypto');
 const Database = require('better-sqlite3');
 
 const app      = express();
@@ -36,33 +50,36 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
-// Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // ── SQLite 初始化 ────────────────────────────────────────────────
 const db = new Database(DB_PATH);
-
-// WAL 模式：提升并发读性能，写操作仍然串行但不阻塞读
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS submissions (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL,
-    year        INTEGER NOT NULL,
-    month       INTEGER NOT NULL,
-    version     TEXT    NOT NULL DEFAULT 'current',
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT    NOT NULL,
+    year         INTEGER NOT NULL,
+    month        INTEGER NOT NULL,
+    version      TEXT    NOT NULL DEFAULT 'current',
     submitted_at TEXT,
-    note        TEXT,
-    schedule    TEXT    NOT NULL DEFAULT '[]'
+    note         TEXT,
+    schedule     TEXT    NOT NULL DEFAULT '[]'
   );
   CREATE INDEX IF NOT EXISTS idx_submissions_ym   ON submissions(year, month);
   CREATE INDEX IF NOT EXISTS idx_submissions_name ON submissions(name);
 
-  CREATE TABLE IF NOT EXISTS admin_state (
+  CREATE TABLE IF NOT EXISTS admin_state_shared (
     id    INTEGER PRIMARY KEY CHECK (id = 1),
     state TEXT    NOT NULL DEFAULT '{}'
+  );
+
+  CREATE TABLE IF NOT EXISTS admin_state_partition (
+    admin_id   TEXT PRIMARY KEY,
+    updated_at TEXT,
+    state      TEXT NOT NULL DEFAULT '{}'
   );
 
   CREATE TABLE IF NOT EXISTS config (
@@ -85,26 +102,81 @@ db.exec(`
   );
 `);
 
-// ── 从旧 JSON 文件迁移（仅首次） ────────────────────────────────
+// ── 从旧数据迁移（仅首次） ───────────────────────────────────────
 function migrateFromJSON() {
-  const migrated = db.prepare("SELECT value FROM config WHERE key = 'migrated'").get();
+  const migrated = db.prepare("SELECT value FROM config WHERE key = 'migrated_v2'").get();
   if (migrated) return;
 
-  console.log('🔄 检测到旧 JSON 数据文件，开始迁移到 SQLite...');
+  console.log('🔄 开始数据迁移到多管理员结构...');
 
   const doMigrate = db.transaction(() => {
-    // 迁移 config.json
+    // 迁移旧单密码 → admin_accounts（归为管理员1）
+    const oldPwRow = db.prepare("SELECT value FROM config WHERE key = 'admin_password_hash'").get();
+    const oldPwHash = oldPwRow ? oldPwRow.value : hashPassword('123456');
+    const adminAccounts = {
+      '1': { passwordHash: oldPwHash },
+      '2': { passwordHash: hashPassword('123456') },
+      '3': { passwordHash: hashPassword('123456') },
+    };
+    db.prepare("INSERT OR REPLACE INTO config(key, value) VALUES('admin_accounts', ?)").run(JSON.stringify(adminAccounts));
+
+    // 迁移旧 admin_state 表 → admin_state_shared（共享数据）
+    // 旧分区数据（empOrder/empOverrides/submissionSnapshots 等）迁移给管理员1
+    const oldState = db.prepare("SELECT state FROM admin_state WHERE id = 1").get();
+    if (oldState) {
+      try {
+        const s = JSON.parse(oldState.state);
+        // 提取共享字段
+        const shared = {
+          locationMap:        s.locationMap        || {},
+          allEmployees:       s.allEmployees        || {},
+          resignedEmployees:  s.resignedEmployees   || {},
+          permanentlyDeleted: s.permanentlyDeleted  || {},
+          employeeAccounts:   s.employeeAccounts    || {},
+          locations:          s.locations           || [],
+          confirmedWeeks:     s.confirmedWeeks      || {},
+          slotLimits:         s.slotLimits          || {},
+          locSettings:        s.locSettings         || {},
+          submissions:        s.submissions         || {},
+        };
+        // locationMap 旧结构是 { 姓名: ['A','B'] }，迁移为 { 姓名: { A: '1', B: '1' } }（全归管理员1）
+        for (const [name, val] of Object.entries(shared.locationMap)) {
+          if (Array.isArray(val)) {
+            const newVal = {};
+            val.forEach(loc => { newVal[loc] = '1'; });
+            shared.locationMap[name] = newVal;
+          }
+        }
+        db.prepare("INSERT OR REPLACE INTO admin_state_shared(id, state) VALUES(1, ?)").run(JSON.stringify(shared));
+
+        // 提取管理员1的独立分区字段
+        const partition1 = {
+          managedLocations:        s.locations           || [],
+          managedEmployees:        Object.keys(s.allEmployees || {}),
+          empOrder:                s.empOrder             || {},
+          empOverrides:            s.empOverrides         || {},
+          submissionSnapshots:     s.submissionSnapshots  || {},
+          submissionPrevSnapshots: s.submissionPrevSnapshots || {},
+          submissionUpdated:       s.submissionUpdated    || {},
+          stateVersion:            s.stateVersion         || 0,
+        };
+        db.prepare("INSERT OR REPLACE INTO admin_state_partition(admin_id, updated_at, state) VALUES('1', ?, ?)").run(new Date().toISOString(), JSON.stringify(partition1));
+      } catch(e) { console.warn('迁移 admin_state 失败:', e.message); }
+    }
+
+    // 迁移旧 JSON 文件（如果存在）
     const cfgFile = path.join(DATA_DIR, 'config.json');
     if (fs.existsSync(cfgFile)) {
       try {
         const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
         if (cfg.passwordHash) {
-          db.prepare("INSERT OR REPLACE INTO config(key, value) VALUES('admin_password_hash', ?)").run(cfg.passwordHash);
+          const accounts = getAdminAccounts();
+          accounts['1'] = { passwordHash: cfg.passwordHash };
+          db.prepare("INSERT OR REPLACE INTO config(key, value) VALUES('admin_accounts', ?)").run(JSON.stringify(accounts));
         }
       } catch(e) { console.warn('迁移 config.json 失败:', e.message); }
     }
 
-    // 迁移 emp_accounts.json
     const empFile = path.join(DATA_DIR, 'emp_accounts.json');
     if (fs.existsSync(empFile)) {
       try {
@@ -116,16 +188,6 @@ function migrateFromJSON() {
       } catch(e) { console.warn('迁移 emp_accounts.json 失败:', e.message); }
     }
 
-    // 迁移 admin_state.json
-    const stateFile = path.join(DATA_DIR, 'admin_state.json');
-    if (fs.existsSync(stateFile)) {
-      try {
-        const state = fs.readFileSync(stateFile, 'utf8');
-        db.prepare("INSERT OR REPLACE INTO admin_state(id, state) VALUES(1, ?)").run(state);
-      } catch(e) { console.warn('迁移 admin_state.json 失败:', e.message); }
-    }
-
-    // 迁移 schedules.json
     const schedFile = path.join(DATA_DIR, 'schedules.json');
     if (fs.existsSync(schedFile)) {
       try {
@@ -137,45 +199,75 @@ function migrateFromJSON() {
       } catch(e) { console.warn('迁移 schedules.json 失败:', e.message); }
     }
 
-    // 迁移 submissions_*.json
     const subFiles = fs.readdirSync(DATA_DIR).filter(f => f.startsWith('submissions_') && f.endsWith('.json'));
-    const insert = db.prepare(`
-      INSERT INTO submissions(name, year, month, version, submitted_at, note, schedule)
-      VALUES(?, ?, ?, ?, ?, ?, ?)
-    `);
+    const insertSub = db.prepare(`INSERT OR IGNORE INTO submissions(name, year, month, version, submitted_at, note, schedule) VALUES(?, ?, ?, ?, ?, ?, ?)`);
     for (const file of subFiles) {
       try {
         const rows = JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'));
         for (const s of rows) {
-          insert.run(s.name, s.year, s.month, s.version || 'current', s.submittedAt || null, s.note || null, JSON.stringify(s.schedule || []));
+          insertSub.run(s.name, s.year, s.month, s.version || 'current', s.submittedAt || null, s.note || null, JSON.stringify(s.schedule || []));
         }
       } catch(e) { console.warn(`迁移 ${file} 失败:`, e.message); }
     }
 
-    // 标记迁移完成
-    db.prepare("INSERT OR REPLACE INTO config(key, value) VALUES('migrated', '1')").run();
+    db.prepare("INSERT OR REPLACE INTO config(key, value) VALUES('migrated_v2', '1')").run();
   });
 
   doMigrate();
   console.log('✅ 数据迁移完成');
 }
 
-migrateFromJSON();
-
 // ── Helpers ─────────────────────────────────────────────────────
 function hashPassword(pw) {
   return crypto.createHash('sha256').update(pw).digest('hex');
 }
-
 const DEFAULT_PW_HASH = hashPassword('123456');
 
-function getAdminPasswordHash() {
-  const row = db.prepare("SELECT value FROM config WHERE key = 'admin_password_hash'").get();
-  return row ? row.value : DEFAULT_PW_HASH;
+// 管理员账号：{ "1": { passwordHash }, "2": {...}, "3": {...} }
+function getAdminAccounts() {
+  const row = db.prepare("SELECT value FROM config WHERE key = 'admin_accounts'").get();
+  if (row) {
+    try { return JSON.parse(row.value); } catch(e) {}
+  }
+  return {
+    '1': { passwordHash: DEFAULT_PW_HASH },
+    '2': { passwordHash: DEFAULT_PW_HASH },
+    '3': { passwordHash: DEFAULT_PW_HASH },
+  };
 }
 
-function setAdminPasswordHash(hash) {
-  db.prepare("INSERT OR REPLACE INTO config(key, value) VALUES('admin_password_hash', ?)").run(hash);
+function setAdminAccountHash(adminId, hash) {
+  const accounts = getAdminAccounts();
+  if (!accounts[adminId]) accounts[adminId] = {};
+  accounts[adminId].passwordHash = hash;
+  db.prepare("INSERT OR REPLACE INTO config(key, value) VALUES('admin_accounts', ?)").run(JSON.stringify(accounts));
+}
+
+function verifyAdminPassword(adminId, password) {
+  const accounts = getAdminAccounts();
+  const account = accounts[adminId];
+  if (!account) return false;
+  return hashPassword(password) === account.passwordHash;
+}
+
+// 共享数据读写
+function readSharedState() {
+  const row = db.prepare("SELECT state FROM admin_state_shared WHERE id = 1").get();
+  return row ? JSON.parse(row.state) : {};
+}
+
+function writeSharedState(shared) {
+  db.prepare("INSERT OR REPLACE INTO admin_state_shared(id, state) VALUES(1, ?)").run(JSON.stringify(shared));
+}
+
+// 分区数据读写
+function readPartitionState(adminId) {
+  const row = db.prepare("SELECT state FROM admin_state_partition WHERE admin_id = ?").get(adminId);
+  return row ? JSON.parse(row.state) : {};
+}
+
+function writePartitionState(adminId, partition) {
+  db.prepare("INSERT OR REPLACE INTO admin_state_partition(admin_id, updated_at, state) VALUES(?, ?, ?)").run(adminId, new Date().toISOString(), JSON.stringify(partition));
 }
 
 function readEmpAccounts() {
@@ -186,10 +278,10 @@ function readEmpAccounts() {
 }
 
 function saveEmpAccounts(accounts) {
-  const upsert = db.prepare("INSERT OR REPLACE INTO emp_accounts(name, password_hash) VALUES(?, ?)");
-  const deleteAll = db.prepare("DELETE FROM emp_accounts");
-  const doSave = db.transaction(() => {
-    deleteAll.run();
+  const upsert  = db.prepare("INSERT OR REPLACE INTO emp_accounts(name, password_hash) VALUES(?, ?)");
+  const delAll  = db.prepare("DELETE FROM emp_accounts");
+  const doSave  = db.transaction(() => {
+    delAll.run();
     for (const [name, obj] of Object.entries(accounts)) {
       if (obj && obj.passwordHash) upsert.run(name, obj.passwordHash);
     }
@@ -205,15 +297,13 @@ app.get('/api', (req, res) => {
   if (action === 'getSubmissions') {
     const y = parseInt(year), m = parseInt(month);
     if (isNaN(y) || isNaN(m)) return res.status(400).json({ error: 'Invalid year or month' });
-
     const rows = db.prepare("SELECT * FROM submissions WHERE year = ? AND month = ?").all(y, m);
-    const all = rows.map(r => ({
+    const all  = rows.map(r => ({
       name: r.name, year: r.year, month: r.month,
       version: r.version, submittedAt: r.submitted_at,
       note: r.note || undefined,
       schedule: JSON.parse(r.schedule || '[]'),
     }));
-
     const currents = all.filter(s => s.version !== 'prev');
     const prevMap  = {};
     all.filter(s => s.version === 'prev').forEach(s => {
@@ -223,24 +313,39 @@ app.get('/api', (req, res) => {
     return res.json({ submissions: currents });
   }
 
-  // 获取管理员排班数据
+  // 获取管理员状态（共享 + 指定管理员分区）
   if (action === 'getAdminState') {
-    const row = db.prepare("SELECT state FROM admin_state WHERE id = 1").get();
-    const state = row ? JSON.parse(row.state) : {};
-    return res.json({ success: true, state });
+    const adminId = req.query.adminId;
+    const shared    = readSharedState();
+    const partition = adminId ? readPartitionState(adminId) : {};
+    return res.json({ success: true, shared, partition });
   }
 
-  // 验证管理员密码
+  // 验证管理员密码（需传 adminId）
   if (action === 'verifyPassword') {
-    const { password } = req.query;
-    const ok = hashPassword(password) === getAdminPasswordHash();
-    return res.json({ success: ok });
+    const { adminId, password } = req.query;
+    if (!adminId || !password) return res.json({ success: false });
+    const ok = verifyAdminPassword(adminId, password);
+    return res.json({ success: ok, adminId });
   }
 
   // 获取员工账号列表
   if (action === 'getEmpAccounts') {
     const accounts = readEmpAccounts();
     return res.json({ success: true, accounts });
+  }
+
+  // 获取所有管理员的 managedLocations（用于地点唯一归属检测）
+  if (action === 'getAllPartitions') {
+    const rows = db.prepare("SELECT admin_id, state FROM admin_state_partition").all();
+    const result = {};
+    for (const r of rows) {
+      try {
+        const s = JSON.parse(r.state);
+        result[r.admin_id] = { managedLocations: s.managedLocations || [], managedEmployees: s.managedEmployees || [] };
+      } catch(e) {}
+    }
+    return res.json({ success: true, partitions: result });
   }
 
   // 获取排班表（单个地点单月）
@@ -269,18 +374,13 @@ app.post('/api', (req, res) => {
       const todayStr = new Date().toISOString().slice(0, 10);
 
       const doSubmit = db.transaction(() => {
-        // 找到当前 current 行
         const currentRow = db.prepare(
           "SELECT * FROM submissions WHERE name = ? AND year = ? AND month = ? AND version != 'prev'"
         ).get(name, y, m);
-
         const currentSchedule = currentRow ? JSON.parse(currentRow.schedule) : null;
-
-        // 删除该员工该月所有旧行
         db.prepare("DELETE FROM submissions WHERE name = ? AND year = ? AND month = ?").run(name, y, m);
 
         if (currentSchedule) {
-          // 二次及以后提交：已过去的日期用旧数据，未来日期用新数据
           const mergedSchedule = (schedule || []).map(entry => {
             if (entry.date < todayStr) {
               const oldEntry = currentSchedule.find(e => e.date === entry.date);
@@ -288,22 +388,12 @@ app.post('/api', (req, res) => {
             }
             return entry;
           });
-          // 旧 current 降为 prev
-          db.prepare(
-            "INSERT INTO submissions(name, year, month, version, submitted_at, note, schedule) VALUES(?, ?, ?, 'prev', ?, ?, ?)"
-          ).run(name, y, m, currentRow.submitted_at, currentRow.note || null, currentRow.schedule);
-          // 写入新 current
-          db.prepare(
-            "INSERT INTO submissions(name, year, month, version, submitted_at, note, schedule) VALUES(?, ?, ?, 'current', ?, ?, ?)"
-          ).run(name, y, m, submittedAt, note || null, JSON.stringify(mergedSchedule));
+          db.prepare("INSERT INTO submissions(name, year, month, version, submitted_at, note, schedule) VALUES(?, ?, ?, 'prev', ?, ?, ?)").run(name, y, m, currentRow.submitted_at, currentRow.note || null, currentRow.schedule);
+          db.prepare("INSERT INTO submissions(name, year, month, version, submitted_at, note, schedule) VALUES(?, ?, ?, 'current', ?, ?, ?)").run(name, y, m, submittedAt, note || null, JSON.stringify(mergedSchedule));
         } else {
-          // 首次提交
-          db.prepare(
-            "INSERT INTO submissions(name, year, month, version, submitted_at, note, schedule) VALUES(?, ?, ?, 'current', ?, ?, ?)"
-          ).run(name, y, m, submittedAt, note || null, JSON.stringify(schedule || []));
+          db.prepare("INSERT INTO submissions(name, year, month, version, submitted_at, note, schedule) VALUES(?, ?, ?, 'current', ?, ?, ?)").run(name, y, m, submittedAt, note || null, JSON.stringify(schedule || []));
         }
       });
-
       doSubmit();
       return res.json({ success: true });
     } catch(err) {
@@ -323,17 +413,21 @@ app.post('/api', (req, res) => {
     }
   }
 
-  // 保存管理员排班数据
+  // 保存管理员状态（共享 + 分区分别存储）
   if (action === 'saveAdminState') {
     try {
-      const { state } = req.body;
-      if (!state) return res.status(400).json({ success: false, error: 'Missing state' });
+      const { adminId, shared, partition } = req.body;
+      if (!adminId) return res.status(400).json({ success: false, error: 'Missing adminId' });
 
       const doSave = db.transaction(() => {
-        db.prepare("INSERT OR REPLACE INTO admin_state(id, state) VALUES(1, ?)").run(JSON.stringify(state));
-        // 同步员工账号
-        if (state.employeeAccounts) {
-          saveEmpAccounts(state.employeeAccounts);
+        // 写共享数据
+        if (shared) {
+          writeSharedState(shared);
+          if (shared.employeeAccounts) saveEmpAccounts(shared.employeeAccounts);
+        }
+        // 写该管理员的分区数据
+        if (partition) {
+          writePartitionState(adminId, partition);
         }
       });
       doSave();
@@ -343,17 +437,69 @@ app.post('/api', (req, res) => {
     }
   }
 
-  // 保存排班表（单个地点单月）
+  // 保存排班表（单个地点单月），含排班冲突优先级判断
   if (action === 'saveSchedule') {
     try {
-      const { loc, year, month, schedule } = req.body;
+      const { loc, year, month, schedule, adminId } = req.body;
       if (!loc || !year || !month) return res.status(400).json({ success: false, error: 'Missing fields' });
       const y = parseInt(year), m = parseInt(month);
       const updatedAt = new Date().toISOString();
-      db.prepare(
-        "INSERT OR REPLACE INTO schedules(loc, year, month, updated_at, schedule) VALUES(?, ?, ?, ?, ?)"
-      ).run(loc, y, m, updatedAt, JSON.stringify(schedule || {}));
-      return res.json({ success: true, updatedAt });
+
+      // 冲突优先级判断：同一员工同一天在多个地点有排班时，按管理员优先级 1>2>3
+      // 读取当前已有排班，检查是否与其他管理员的排班冲突
+      let finalSchedule = schedule || {};
+      const conflicts = []; // 记录被高优先级覆盖的冲突信息
+
+      if (adminId && finalSchedule.days) {
+        // 获取所有地点同月排班，用于冲突检测
+        const allSchedules = db.prepare("SELECT loc, schedule FROM schedules WHERE year = ? AND month = ?").all(y, m);
+        const otherSchedules = allSchedules.filter(r => r.loc !== loc);
+
+        // 获取所有管理员分区，确定各管理员负责的地点
+        const partitionRows = db.prepare("SELECT admin_id, state FROM admin_state_partition").all();
+        const locOwnerMap = {}; // { loc: adminId }
+        for (const pr of partitionRows) {
+          try {
+            const ps = JSON.parse(pr.state);
+            (ps.managedLocations || []).forEach(l => { locOwnerMap[l] = pr.admin_id; });
+          } catch(e) {}
+        }
+
+        // 对新排班里的每个员工+日期，检查其他地点是否已有排班
+        for (const [daySlotKey, names] of Object.entries(finalSchedule.days)) {
+          if (!daySlotKey.endsWith('||start')) continue; // 只检查 start slot
+          const dateKey = daySlotKey.replace('||start', '');
+
+          for (const name of [...names]) {
+            for (const other of otherSchedules) {
+              try {
+                const otherSched = JSON.parse(other.schedule);
+                const otherStart = (otherSched.days || {})[`${dateKey}||start`] || [];
+                if (!otherStart.includes(name)) continue;
+
+                // 该员工当天在其他地点已排班，判断优先级
+                const otherAdminId = locOwnerMap[other.loc] || '1';
+                const myPriority    = parseInt(adminId)     || 99;
+                const otherPriority = parseInt(otherAdminId) || 99;
+
+                if (myPriority > otherPriority) {
+                  // 我的优先级低，移除该员工的排班
+                  finalSchedule.days[daySlotKey] = finalSchedule.days[daySlotKey].filter(n => n !== name);
+                  const endKey = `${dateKey}||end`;
+                  if (finalSchedule.days[endKey]) {
+                    finalSchedule.days[endKey] = finalSchedule.days[endKey].filter(n => n !== name);
+                  }
+                  conflicts.push({ name, date: dateKey, otherLoc: other.loc, otherAdminId });
+                }
+                // 我的优先级高或相等：保留我的排班（不修改其他地点的数据，前端冲突标记会显示）
+              } catch(e) {}
+            }
+          }
+        }
+      }
+
+      db.prepare("INSERT OR REPLACE INTO schedules(loc, year, month, updated_at, schedule) VALUES(?, ?, ?, ?, ?)").run(loc, y, m, updatedAt, JSON.stringify(finalSchedule));
+      return res.json({ success: true, updatedAt, conflicts });
     } catch(err) {
       return res.status(500).json({ success: false, error: err.message });
     }
@@ -371,14 +517,15 @@ app.post('/api', (req, res) => {
     }
   }
 
-  // 修改管理员密码
+  // 修改管理员密码（需传 adminId）
   if (action === 'changePassword') {
     try {
-      const { oldPassword, newPassword } = req.body;
-      if (hashPassword(oldPassword) !== getAdminPasswordHash()) {
+      const { adminId, oldPassword, newPassword } = req.body;
+      if (!adminId) return res.json({ success: false, error: '缺少管理员ID' });
+      if (!verifyAdminPassword(adminId, oldPassword)) {
         return res.json({ success: false, error: '当前密码错误' });
       }
-      setAdminPasswordHash(hashPassword(newPassword));
+      setAdminAccountHash(adminId, hashPassword(newPassword));
       return res.json({ success: true });
     } catch(err) {
       return res.status(500).json({ success: false, error: err.message });
@@ -435,11 +582,14 @@ app.post('/api', (req, res) => {
   res.status(400).json({ success: false, error: 'Unknown action' });
 });
 
+// ── 启动前执行迁移 ───────────────────────────────────────────────
+migrateFromJSON();
+
 // ── Start ────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ 排班系统本地服务器运行在 http://localhost:${PORT}`);
   console.log(`   数据库文件: ${DB_PATH}`);
   console.log(`   管理员界面: http://localhost:${PORT}/admin.html`);
   console.log(`   员工界面:   http://localhost:${PORT}/schedule_app.html`);
-  console.log(`   初始密码: 123456`);
+  console.log(`   初始密码: 123456（管理员1/2/3 均为此密码，建议登录后修改）`);
 });

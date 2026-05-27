@@ -138,6 +138,9 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
 .loc-tag.active-4 { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
 .loc-tag.active-5 { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
 .loc-tag.inactive { background: #f0f4fa; color: #8aabcc; border-color: #c0d0e4; }
+.loc-owner-1 { background: #3b82f6 !important; color: #fff !important; border-color: #2563eb !important; }
+.loc-owner-2 { background: #22c55e !important; color: #fff !important; border-color: #16a34a !important; }
+.loc-owner-3 { background: #f97316 !important; color: #fff !important; border-color: #ea580c !important; }
 
 /* ── SCHEDULING VIEW ── */
 .sched-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -280,6 +283,7 @@ body { font-family: 'Noto Serif SC', serif; background: var(--bg); color: var(--
     <div class="login-title" data-i18n="admin_login_title">排班管理后台</div>
     <div class="login-sub">Ume &amp; Comé 排班系统</div>
     <div style="text-align:right;margin-bottom:10px;" id="admin-login-lang-switch"></div>
+    <input class="login-input" type="text" id="admin-id-input" placeholder="管理员账号（1 / 2 / 3）" maxlength="1" style="margin-bottom:8px;">
     <input class="login-input" type="password" id="pw-input" data-i18n="admin_login_pw_ph" data-i18n-attr="placeholder" placeholder="请输入管理员密码" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="login-btn" data-i18n="admin_login_btn" onclick="doLogin()">进入管理后台</button>
     <button class="login-link" data-i18n="nav_change_pw" onclick="toggleChangePw()">修改密码</button>
@@ -688,15 +692,21 @@ const Backend = {
   },
 
   // 保存管理员排班数据（全量覆盖）
-  async saveAdminState(state) {
-    if (BACKEND_MODE === 'local') return this._localPost({ action: 'saveAdminState', state });
-    return this._gasPost({ action: 'saveAdminState', state });
+  async saveAdminState({ adminId, shared, partition }) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'saveAdminState', adminId, shared, partition });
+    return this._gasPost({ action: 'saveAdminState', adminId, shared, partition });
   },
 
   // 读取管理员排班数据
-  async getAdminState() {
-    if (BACKEND_MODE === 'local') return this._localGet({ action: 'getAdminState' });
-    return this._gasGet({ action: 'getAdminState' });
+  async getAdminState(adminId) {
+    if (BACKEND_MODE === 'local') return this._localGet({ action: 'getAdminState', adminId });
+    return this._gasGet({ action: 'getAdminState', adminId });
+  },
+
+  // 读取所有管理员的分区摘要
+  async getAllPartitions() {
+    if (BACKEND_MODE === 'local') return this._localGet({ action: 'getAllPartitions' });
+    return this._gasGet({ action: 'getAllPartitions' });
   },
 
   // 删除某员工的所有提交记录
@@ -706,15 +716,15 @@ const Backend = {
   },
 
   // 验证密码
-  async verifyPassword(password) {
-    if (BACKEND_MODE === 'local') return this._localGet({ action: 'verifyPassword', password });
-    return this._gasGet({ action: 'verifyPassword', password });
+  async verifyPassword(adminId, password) {
+    if (BACKEND_MODE === 'local') return this._localGet({ action: 'verifyPassword', adminId, password });
+    return this._gasGet({ action: 'verifyPassword', adminId, password });
   },
 
   // 修改管理员密码
-  async changePassword(oldPassword, newPassword) {
-    if (BACKEND_MODE === 'local') return this._localPost({ action: 'changePassword', oldPassword, newPassword });
-    return this._gasPost({ action: 'changePassword', oldPassword, newPassword });
+  async changePassword(adminId, oldPassword, newPassword) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'changePassword', adminId, oldPassword, newPassword });
+    return this._gasPost({ action: 'changePassword', adminId, oldPassword, newPassword });
   },
 
   // 创建员工账号（默认密码 123456）
@@ -748,9 +758,9 @@ const Backend = {
   },
 
   // 保存指定地点+月份的排班表（独立存储，不走 AdminState）
-  async saveSchedule(loc, year, month, schedule) {
-    if (BACKEND_MODE === 'local') return this._localPost({ action: 'saveSchedule', loc, year, month, schedule });
-    return this._gasPost({ action: 'saveSchedule', loc, year, month, schedule });
+  async saveSchedule(loc, year, month, schedule, adminId) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'saveSchedule', loc, year, month, schedule, adminId });
+    return this._gasPost({ action: 'saveSchedule', loc, year, month, schedule, adminId });
   },
 };
 
@@ -789,7 +799,41 @@ let appState = {
   // 状态版本号：每次 persistData 写入前递增，loadPersistedData 读回时对比
   // 只接受版本号 >= 内存版本的数据，防止旧数据覆盖新状态（竞态保护）
   stateVersion: 0,
+  // 多管理员支持
+  currentAdminId: null,     // 当前登录的管理员ID（"1"/"2"/"3"）
+  managedLocations: [],     // 当前管理员选中的地点列表
+  managedEmployees: [],     // 当前管理员选中的员工列表
+  allPartitions: {},        // 所有管理员的分区摘要 { "1": { managedLocations, managedEmployees }, ... }
 };
+
+// ── MULTI-ADMIN HELPERS ───────────────────────────────────────────
+function getUnclaimedEmployees() {
+  // Employees not claimed by any admin
+  const allClaimed = new Set();
+  for (const p of Object.values(appState.allPartitions)) {
+    (p.managedEmployees || []).forEach(n => allClaimed.add(n));
+  }
+  // Also include current admin's managedEmployees
+  (appState.managedEmployees || []).forEach(n => allClaimed.add(n));
+  const allNames = new Set([
+    ...Object.keys(appState.allEmployees),
+    ...Object.keys(appState.locationMap),
+    ...Object.keys(appState.employeeAccounts),
+  ]);
+  return [...allNames].filter(n => !allClaimed.has(n) && !appState.resignedEmployees[n] && !appState.permanentlyDeleted[n]);
+}
+
+function isMyEmployee(name) {
+  return (appState.managedEmployees || []).includes(name);
+}
+
+function getMyVisibleEmployees() {
+  // Returns employees visible to current admin: managedEmployees + unclaimed
+  const mine = new Set(appState.managedEmployees || []);
+  const unclaimed = new Set(getUnclaimedEmployees());
+  const all = new Set([...mine, ...unclaimed]);
+  return [...all].filter(n => !appState.resignedEmployees[n] && !appState.permanentlyDeleted[n]).sort();
+}
 
 // ── SCHEDULE CACHE ────────────────────────────────────────────────
 // scheduleCache 替代原 appState.schedules，独立存储每个地点+月份的排班表
@@ -863,13 +907,20 @@ function _prefetchAdjacentMonths(loc, year, month) {
 
 // 保存当前地点+月份排班表到服务器
 async function saveScheduleToServer(loc, year, month) {
+  const adminId = appState.currentAdminId;
   const key = _schedCacheKey(loc, year, month);
   const cached = scheduleCache[key] || { days: {}, timeOverrides: {} };
   const schedule = { days: cached.days || {}, timeOverrides: cached.timeOverrides || {} };
-  const result = await Backend.saveSchedule(loc, year, month, schedule);
+  const result = await Backend.saveSchedule(loc, year, month, schedule, adminId);
   if (!result || !result.success) throw new Error(result && result.error ? result.error : '保存失败');
   _takeScheduleSaveSnapshot(loc, year, month);
   _updateSaveIndicator();
+  // 如果 result.conflicts 不为空，显示冲突提示
+  if (result.conflicts && result.conflicts.length > 0) {
+    const msg = result.conflicts.map(c => `${c.name} ${c.date} 已被管理员${c.otherAdminId}排在${c.otherLoc}`).join('\n');
+    console.warn('排班冲突（低优先级被覆盖）:\n' + msg);
+    showMsg('⚠ 部分排班因优先级冲突未能保存，详见控制台');
+  }
   return result;
 }
 
@@ -887,13 +938,22 @@ function toggleChangePw() {
 }
 
 async function doLogin() {
+  const adminId = document.getElementById('admin-id-input').value.trim();
   const pw = document.getElementById('pw-input').value;
+  const errEl = document.getElementById('login-error');
+  if (!['1','2','3'].includes(adminId)) {
+    errEl.textContent = '请输入管理员账号（1/2/3）';
+    setTimeout(() => { errEl.textContent = ''; }, 3000);
+    return;
+  }
   const btn = document.querySelector('#login-screen button');
   if (btn) { btn.disabled = true; btn.textContent = t('admin_login_verifying'); }
   try {
-    const result = await Backend.verifyPassword(pw);
+    const result = await Backend.verifyPassword(adminId, pw);
     if (result && result.success) {
       appState.loggedIn = true;
+      appState.currentAdminId = adminId;
+      sessionStorage.setItem('currentAdminId', adminId);
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app').style.display = 'block';
       initApp();
@@ -901,13 +961,13 @@ async function doLogin() {
       populateMonthSelects();
       applyI18n();
     } else {
-      document.getElementById('login-error').textContent = t('admin_login_wrong');
+      errEl.textContent = t('admin_login_wrong');
       document.getElementById('pw-input').value = '';
-      setTimeout(() => { document.getElementById('login-error').textContent = ''; }, 3000);
+      setTimeout(() => { errEl.textContent = ''; }, 3000);
     }
   } catch(e) {
-    document.getElementById('login-error').textContent = getLang() === 'en' ? 'Connection failed. Please check your network.' : '连接失败，请检查网络。';
-    setTimeout(() => { document.getElementById('login-error').textContent = ''; }, 3000);
+    errEl.textContent = getLang() === 'en' ? 'Connection failed. Please check your network.' : '连接失败，请检查网络。';
+    setTimeout(() => { errEl.textContent = ''; }, 3000);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = t('admin_login_btn'); }
   }
@@ -920,6 +980,8 @@ document.addEventListener('dragend', () => {
 
 function doLogout() {
   appState.loggedIn = false;
+  appState.currentAdminId = null;
+  sessionStorage.removeItem('currentAdminId');
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('pw-input').value = '';
@@ -934,7 +996,7 @@ async function doChangePassword() {
   if (newPw.length < 6) { errEl.textContent = t('cpw_min4'); return; }
   if (newPw !== newPw2) { errEl.textContent = t('cpw_mismatch'); return; }
   try {
-    const result = await Backend.changePassword(oldPw, newPw);
+    const result = await Backend.changePassword(appState.currentAdminId, oldPw, newPw);
     if (!result.success) { errEl.textContent = result.error || t('cpw_wrong_old'); return; }
     errEl.style.color = '#1a7a4a';
     errEl.textContent = t('cpw_success');
@@ -959,7 +1021,7 @@ async function doChangePasswordModal() {
   if (newPw.length < 6) { errEl.textContent = t('cpw_min4'); return; }
   if (newPw !== newPw2) { errEl.textContent = t('cpw_mismatch'); return; }
   try {
-    const result = await Backend.changePassword(oldPw, newPw);
+    const result = await Backend.changePassword(appState.currentAdminId, oldPw, newPw);
     if (!result.success) { errEl.textContent = result.error || t('cpw_wrong_old'); return; }
     errEl.style.color = '#1a7a4a';
     errEl.textContent = t('cpw_success');
@@ -997,6 +1059,7 @@ function onLangChanged(lang) {
 
 // ── INIT ──
 function initApp() {
+  appState.currentAdminId = sessionStorage.getItem('currentAdminId') || null;
   const now = new Date();
   const yr = now.getFullYear();
 
@@ -1032,7 +1095,10 @@ function initApp() {
 
   // Populate location selectors dynamically from LOCATIONS array
   const schedLocSel = document.getElementById('sched-location');
-  schedLocSel.innerHTML = getLocations().map(l => `<option value="${l}">${l}</option>`).join('');
+  const _myLocs = (appState.managedLocations && appState.managedLocations.length > 0)
+    ? appState.managedLocations
+    : getLocations();
+  schedLocSel.innerHTML = _myLocs.map(l => `<option value="${l}">${l}</option>`).join('');
 
   // Populate location table header dynamically
   const locHeader = document.getElementById('loc-table-header');
@@ -1067,105 +1133,133 @@ function _loadLocalBackup() {
 }
 
 async function loadPersistedData() {
+  const adminId = appState.currentAdminId;
   try {
-    const result = await Backend.getAdminState();
-    let state = (result && result.state) ? result.state : {};
+    const result = await Backend.getAdminState(adminId);
+    // 新 API 返回 { success, shared, partition }
+    let shared    = (result && result.shared)    ? result.shared    : {};
+    let partition = (result && result.partition) ? result.partition : {};
     // 如果 GAS 返回空（首次部署或请求异常），尝试用本地备份恢复
-    const hasData = state && (state.employeeAccounts || state.locationMap || state.schedules);
+    const hasData = (shared && (shared.employeeAccounts || shared.locationMap)) ||
+                    (partition && (partition.empOrder || partition.stateVersion));
     if (!hasData) {
       const backup = _loadLocalBackup();
       if (backup) {
         console.warn('GAS 返回空数据，使用本地备份恢复');
-        state = backup;
+        shared    = backup.shared    || backup || {};
+        partition = backup.partition || {};
       }
     }
     // 版本号保护：如果读回来的版本比内存版本旧，说明有更新的 persistData 尚未写入完成
     // 此时跳过覆盖，避免竞态导致新状态被旧数据覆盖
-    const incomingVersion = state.stateVersion || 0;
-    const memoryVersion   = appState.stateVersion || 0;
+    const incomingVersion = partition.stateVersion || 0;
+    const memoryVersion   = appState.stateVersion  || 0;
     if (incomingVersion < memoryVersion) {
       console.warn(`loadPersistedData: 跳过旧版本数据（服务器版本 ${incomingVersion} < 内存版本 ${memoryVersion}）`);
-      return;
-    }
-    if (state.locationMap)   appState.locationMap   = state.locationMap;
-    // 迁移：旧版 AdminState 含 schedules 字段 → 迁移到 scheduleCache（标记为已保存状态）
-    if (state.schedules && typeof state.schedules === 'object') {
-      for (const [key, data] of Object.entries(state.schedules)) {
-        if (!scheduleCache[key]) {
-          scheduleCache[key] = { ...data, _fetched: true };
-          // 直接用 key 写入快照，避免 data.loc/year/month 与 key 不一致
-          _scheduleSaveSnapshot[key] = JSON.stringify({
-            days: data.days || {},
-            timeOverrides: data.timeOverrides || {}
-          });
+    } else {
+      // 从 shared 读取
+      if (shared.locationMap)         appState.locationMap         = shared.locationMap;
+      // 向下兼容：locationMap 旧结构是数组，自动迁移为对象（归给管理员1）
+      if (appState.locationMap) {
+        for (const [name, val] of Object.entries(appState.locationMap)) {
+          if (Array.isArray(val)) {
+            const newVal = {};
+            val.forEach(loc => { newVal[loc] = '1'; });
+            appState.locationMap[name] = newVal;
+          }
         }
       }
-    }
-    if (state.submissions) {
-      // 兼容旧格式（数组）和新格式（对象按月缓存）
-      if (Array.isArray(state.submissions)) {
-        state.submissions.forEach(s => {
-          const key = `${s.year}||${s.month}`;
-          if (!appState.submissions[key]) appState.submissions[key] = [];
-          if (!appState.submissions[key].find(x => x.name === s.name)) appState.submissions[key].push(s);
-        });
-      } else {
-        appState.submissions = state.submissions;
+      if (shared.allEmployees)        appState.allEmployees        = shared.allEmployees;
+      if (shared.resignedEmployees)   appState.resignedEmployees   = shared.resignedEmployees;
+      if (shared.permanentlyDeleted)  appState.permanentlyDeleted  = shared.permanentlyDeleted;
+      if (shared.employeeAccounts)    appState.employeeAccounts    = shared.employeeAccounts;
+      if (shared.confirmedWeeks)      appState.confirmedWeeks      = shared.confirmedWeeks;
+      if (shared.slotLimits)          appState.slotLimits          = shared.slotLimits;
+      if (shared.locSettings)         appState.locSettings         = shared.locSettings;
+      if (shared.submissions) {
+        // 兼容旧格式（数组）和新格式（对象按月缓存）
+        if (Array.isArray(shared.submissions)) {
+          shared.submissions.forEach(s => {
+            const key = `${s.year}||${s.month}`;
+            if (!appState.submissions[key]) appState.submissions[key] = [];
+            if (!appState.submissions[key].find(x => x.name === s.name)) appState.submissions[key].push(s);
+          });
+        } else {
+          appState.submissions = shared.submissions;
+        }
+        renderSubmissionsTable();
       }
-      renderSubmissionsTable();
+      // 地点列表：优先从服务器加载，fallback 到 config.js 的 LOCATIONS
+      if (shared.locations && shared.locations.length > 0) {
+        appState.locations = shared.locations;
+      } else {
+        appState.locations = typeof LOCATIONS !== 'undefined' ? [...LOCATIONS] : [];
+      }
+      // 向下兼容：如果没有 allEmployees，把 locationMap 中的员工名补入
+      if (!shared.allEmployees && shared.locationMap) {
+        Object.keys(shared.locationMap).forEach(n => { appState.allEmployees[n] = true; });
+      }
+
+      // 从 partition 读取
+      if (partition.managedLocations)        appState.managedLocations        = partition.managedLocations;
+      if (partition.managedEmployees)        appState.managedEmployees        = partition.managedEmployees;
+      if (partition.empOrder)                appState.empOrder                = partition.empOrder;
+      if (partition.empOverrides)            appState.empOverrides            = partition.empOverrides;
+      if (partition.submissionSnapshots)     appState.submissionSnapshots     = partition.submissionSnapshots;
+      if (partition.submissionPrevSnapshots) appState.submissionPrevSnapshots = partition.submissionPrevSnapshots;
+      if (partition.submissionUpdated)       appState.submissionUpdated       = partition.submissionUpdated;
+      // 同步版本号：取服务器版本和内存版本中较大的，确保重启后版本号不回退
+      if (partition.stateVersion) appState.stateVersion = Math.max(appState.stateVersion || 0, partition.stateVersion);
     }
-    if (state.empOrder)      appState.empOrder      = state.empOrder;
-    if (state.empOverrides)  appState.empOverrides  = state.empOverrides;
-    if (state.slotLimits)    appState.slotLimits    = state.slotLimits;
-    if (state.locSettings)   appState.locSettings   = state.locSettings;
-    if (state.confirmedWeeks) appState.confirmedWeeks = state.confirmedWeeks;
-    if (state.allEmployees)      appState.allEmployees      = state.allEmployees;
-    if (state.resignedEmployees) appState.resignedEmployees = state.resignedEmployees;
-    if (state.permanentlyDeleted) appState.permanentlyDeleted = state.permanentlyDeleted;
-    if (state.employeeAccounts)   appState.employeeAccounts   = state.employeeAccounts;
-    if (state.submissionSnapshots)     appState.submissionSnapshots     = state.submissionSnapshots;
-    if (state.submissionPrevSnapshots) appState.submissionPrevSnapshots = state.submissionPrevSnapshots;
-    if (state.submissionUpdated)       appState.submissionUpdated       = state.submissionUpdated;
-    // 同步版本号：取服务器版本和内存版本中较大的，确保重启后版本号不回退
-    if (state.stateVersion) appState.stateVersion = Math.max(appState.stateVersion || 0, state.stateVersion);
-    // 地点列表：优先从服务器加载，fallback 到 config.js 的 LOCATIONS
-    if (state.locations && state.locations.length > 0) {
-      appState.locations = state.locations;
-    } else {
-      appState.locations = typeof LOCATIONS !== 'undefined' ? [...LOCATIONS] : [];
-    }
-    // 向下兼容：如果没有 allEmployees，把 locationMap 中的员工名补入
-    if (!state.allEmployees && state.locationMap) {
-      Object.keys(state.locationMap).forEach(n => { appState.allEmployees[n] = true; });
-    }
+
     // 加载后立即同步 localStorage，让同域名员工端可登录
-    if (state.employeeAccounts) {
-      try { localStorage.setItem('emp_accounts_v1', JSON.stringify(state.employeeAccounts)); } catch(e) {}
+    if (shared.employeeAccounts) {
+      try { localStorage.setItem('emp_accounts_v1', JSON.stringify(shared.employeeAccounts)); } catch(e) {}
     }
+
+    // 加载完成后，拉取所有管理员分区摘要
+    try {
+      const partResult = await Backend.getAllPartitions();
+      if (partResult && partResult.partitions) {
+        appState.allPartitions = partResult.partitions;
+      }
+    } catch(e) { console.warn('加载分区摘要失败:', e); }
+
   } catch(e) { console.warn('加载持久化数据失败:', e); }
 }
 
 // 防抖：避免每次点击都立即触发保存请求
 let _persistTimer = null;
-function _buildAdminState() {
+function _buildSharedState() {
   return {
-    locationMap:    appState.locationMap,
-    submissions:    appState.submissions,
-    empOrder:       appState.empOrder,
-    empOverrides:   appState.empOverrides,
-    slotLimits:     appState.slotLimits,
-    locSettings:    appState.locSettings,
-    confirmedWeeks: appState.confirmedWeeks,
+    locationMap:          appState.locationMap,
     allEmployees:         appState.allEmployees,
     resignedEmployees:    appState.resignedEmployees,
     permanentlyDeleted:   appState.permanentlyDeleted,
     employeeAccounts:     appState.employeeAccounts,
+    locations:            appState.locations,
+    confirmedWeeks:       appState.confirmedWeeks,
+    slotLimits:           appState.slotLimits,
+    locSettings:          appState.locSettings,
+    submissions:          appState.submissions,
+  };
+}
+
+function _buildPartitionState() {
+  return {
+    managedLocations:        appState.managedLocations,
+    managedEmployees:        appState.managedEmployees,
+    empOrder:                appState.empOrder,
+    empOverrides:            appState.empOverrides,
     submissionSnapshots:     appState.submissionSnapshots,
     submissionPrevSnapshots: appState.submissionPrevSnapshots || {},
     submissionUpdated:       appState.submissionUpdated,
-    locations:               appState.locations,
     stateVersion:            appState.stateVersion,
   };
+}
+
+function _buildAdminState() {
+  return { shared: _buildSharedState(), partition: _buildPartitionState() };
 }
 
 function _backupStateLocally(state) {
@@ -1173,6 +1267,7 @@ function _backupStateLocally(state) {
   try { localStorage.setItem('admin_state_backup_v1', JSON.stringify(state)); } catch(e) {}
   // 同步员工账号给员工端
   try { localStorage.setItem('emp_accounts_v1', JSON.stringify(appState.employeeAccounts)); } catch(e) {}
+  // state 结构为 { shared, partition }，employeeAccounts 在 shared 里
 }
 
 function persistData() {
@@ -1180,9 +1275,12 @@ function persistData() {
   appState.stateVersion = (appState.stateVersion || 0) + 1;
   clearTimeout(_persistTimer);
   _persistTimer = setTimeout(() => {
-    const state = _buildAdminState();
-    _backupStateLocally(state);
-    Backend.saveAdminState(state).catch(e => console.warn('保存数据失败:', e));
+    const adminId = appState.currentAdminId;
+    if (!adminId) return; // 未登录不保存
+    const shared    = _buildSharedState();
+    const partition = _buildPartitionState();
+    _backupStateLocally({ shared, partition });
+    Backend.saveAdminState({ adminId, shared, partition }).catch(e => console.warn('保存数据失败:', e));
   }, 800); // 800ms 防抖
   _updateSaveIndicator();
 }
@@ -1192,15 +1290,17 @@ let _saveToastTimer = null;
 async function manualSave() {
   clearTimeout(_persistTimer);
   _persistTimer = null;
-  const state = _buildAdminState();
-  _backupStateLocally(state);
+  const adminId = appState.currentAdminId;
+  const shared    = _buildSharedState();
+  const partition = _buildPartitionState();
+  _backupStateLocally({ shared, partition });
   const loc = document.getElementById('sched-location') && document.getElementById('sched-location').value;
   const year = parseInt(document.getElementById('sched-year') && document.getElementById('sched-year').value);
   const month = parseInt(document.getElementById('sched-month') && document.getElementById('sched-month').value);
   try {
     // 同时保存 AdminState 和当前排班表
     await Promise.all([
-      Backend.saveAdminState(state),
+      adminId ? Backend.saveAdminState({ adminId, shared, partition }) : Promise.resolve(),
       (loc && !isNaN(year) && !isNaN(month)) ? saveScheduleToServer(loc, year, month) : Promise.resolve(),
     ]);
     const toast = document.getElementById('save-toast');
@@ -1371,8 +1471,9 @@ function renderSubmissionsTable() {
     ...Object.keys(appState.employeeAccounts),
     ...submittedSubs.map(s => s.name),
   ]);
+  const _myVisible = new Set(getMyVisibleEmployees());
   const allAccountNames = [...nameSet].filter(n =>
-    !appState.permanentlyDeleted[n] && !appState.resignedEmployees[n]
+    !appState.permanentlyDeleted[n] && !appState.resignedEmployees[n] && _myVisible.has(n)
   );
   allAccountNames.sort();
 
@@ -1384,7 +1485,7 @@ function renderSubmissionsTable() {
 
   const hasNew = appState.persistedLoaded && submittedSubs.some(s =>
     !appState.resignedEmployees[s.name] && !appState.permanentlyDeleted[s.name] &&
-    (!appState.locationMap[s.name] || appState.locationMap[s.name].length === 0));
+    (!appState.locationMap[s.name] || Object.keys(appState.locationMap[s.name]).length === 0));
   document.getElementById('new-employee-notice').style.display = hasNew ? 'block' : 'none';
 
   if (allAccountNames.length === 0) {
@@ -1398,7 +1499,7 @@ function renderSubmissionsTable() {
     const hasAccount = !!appState.employeeAccounts[name];
     const isUnsubmitted = !s;
     const isUpdated = !isUnsubmitted && !!appState.submissionUpdated[snapKey];
-    const isNoLoc = s && !appState.resignedEmployees[name] && (!appState.locationMap[name] || appState.locationMap[name].length === 0);
+    const isNoLoc = s && !appState.resignedEmployees[name] && (!appState.locationMap[name] || Object.keys(appState.locationMap[name]).length === 0);
 
     // 姓名列徽章
     let badge = '';
@@ -1594,8 +1695,9 @@ function renderLocationTab() {
     ...Object.keys(appState.allEmployees),
     ...Object.keys(appState.locationMap),
   ]);
-  // 过滤已离职员工（不在地点标记中显示）
-  const names = [...nameSet].filter(n => !appState.resignedEmployees[n]).sort();
+  // 过滤已离职员工（不在地点标记中显示），只显示当前管理员可见员工
+  const _myVisible = new Set(getMyVisibleEmployees());
+  const names = [...nameSet].filter(n => !appState.resignedEmployees[n] && _myVisible.has(n)).sort();
   const tbody = document.getElementById('loc-tbody');
   const locs = getLocations();
   const colSpan = locs.length + 1;
@@ -1606,12 +1708,29 @@ function renderLocationTab() {
     tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:32px;color:var(--text-muted);">${t('loc_empty_state')}</td></tr>`;
     return;
   }
+  const adminId = appState.currentAdminId || '1';
   tbody.innerHTML = names.map(name => {
-    const assigned = appState.locationMap[name] || [];
+    const locObj = appState.locationMap[name] || {};
+    const assigned = Object.keys(locObj);
     const cells = locs.map((loc,i) => {
-      const isActive = assigned.includes(loc);
+      const owner = locObj[loc];
+      const isActive = owner !== undefined;
+      let colorClass = 'inactive';
+      let cellStyle = '';
+      let onclickAttr = `onclick="toggleLocation('${name.replace(/'/g,"\\'")}','${loc}')"`;
+      let titleAttr = `title="${getLang()==='en'?'Click to mark':'点击标记'}"`;
+      if (isActive) {
+        colorClass = `loc-owner-${owner}`;
+        if (owner === adminId) {
+          titleAttr = `title="${getLang()==='en'?`Marked by you (Admin ${owner})`:`你（管理员${owner}）标记`}"`;
+        } else {
+          cellStyle = ' style="cursor:not-allowed;opacity:0.6;"';
+          onclickAttr = '';
+          titleAttr = `title="${getLang()==='en'?`Marked by Admin ${owner}`:`管理员${owner}标记`}"`;
+        }
+      }
       return `<td style="text-align:center;padding:8px;">
-        <button class="loc-tag ${isActive?'active-'+(i%6):'inactive'}" onclick="toggleLocation('${name.replace(/'/g,"\\'")}','${loc}')">${isActive?'✓':'+'}</button>
+        <button class="loc-tag ${colorClass}"${cellStyle} ${onclickAttr} ${titleAttr}>${isActive?'✓':'+'}</button>
       </td>`;
     }).join('');
     const isNew = assigned.length === 0;
@@ -1621,13 +1740,15 @@ function renderLocationTab() {
 }
 
 function toggleLocation(name, loc) {
-  if (!appState.locationMap[name]) appState.locationMap[name] = [];
-  const arr = appState.locationMap[name];
-  const idx = arr.indexOf(loc);
-  if (idx >= 0) {
-    // Removing this person from this location:
-    // clear their assignments in ALL schedule entries for this specific location
-    arr.splice(idx, 1);
+  const adminId = appState.currentAdminId || '1';
+  if (!appState.locationMap[name]) appState.locationMap[name] = {};
+  const currentOwner = appState.locationMap[name][loc];
+  // 不能操作别人标记的地点
+  if (currentOwner && currentOwner !== adminId) return;
+  if (currentOwner === adminId) {
+    // 取消自己的标记
+    delete appState.locationMap[name][loc];
+    // 清除该员工在该地点所有月份的排班
     for (const [key, data] of Object.entries(scheduleCache)) {
       if (data.loc !== loc) continue;
       for (const slotKey of Object.keys(data.days)) {
@@ -1635,7 +1756,8 @@ function toggleLocation(name, loc) {
       }
     }
   } else {
-    arr.push(loc);
+    // 添加标记
+    appState.locationMap[name][loc] = adminId;
   }
   // Auto-save and sync to schedule
   persistData();
@@ -1652,7 +1774,12 @@ function toggleLocation(name, loc) {
 function refreshLocationUI() {
   // 同步排班地点下拉框
   const sel = document.getElementById('sched-location');
-  if (sel) sel.innerHTML = getLocations().map(l => `<option value="${l}">${l}</option>`).join('');
+  if (sel) {
+    const _myLocs2 = (appState.managedLocations && appState.managedLocations.length > 0)
+      ? appState.managedLocations
+      : getLocations();
+    sel.innerHTML = _myLocs2.map(l => `<option value="${l}">${l}</option>`).join('');
+  }
   // 同步地点标记表头
   const locHeader = document.getElementById('loc-table-header');
   if (locHeader) locHeader.innerHTML = `<th>${t('emp_mgmt_col_name')}</th>` + getLocations().map(l => `<th style="text-align:center;">${l}</th>`).join('');
@@ -1670,11 +1797,60 @@ function renderLocMgmt() {
   }
   el.innerHTML = locs.map((loc, i) => {
     const safeLoc = loc.replace(/'/g, "\\'");
+    const adminId2 = appState.currentAdminId || '1';
+    const locOwnerTags = (() => {
+      const tags = [];
+      const seen = new Set();
+      if ((appState.managedLocations||[]).includes(loc)) { tags.push(adminId2); seen.add(adminId2); }
+      for (const [aid, p] of Object.entries(appState.allPartitions)) {
+        if (!seen.has(aid) && (p.managedLocations||[]).includes(loc)) { tags.push(aid); seen.add(aid); }
+      }
+      return tags.length
+        ? tags.map(aid => `<span class="loc-owner-${aid}" style="display:inline-block;border-radius:10px;padding:1px 8px;font-size:11px;margin-right:3px;">${getLang()==='en'?'Admin':'管'} ${aid}</span>`).join('')
+        : `<span style="color:#aaa;font-size:11px;">${getLang()==='en'?'Unclaimed':'未认领'}</span>`;
+    })();
+    const otherOwner = (() => {
+      for (const [aid, p] of Object.entries(appState.allPartitions)) {
+        if (aid !== adminId2 && (p.managedLocations||[]).includes(loc)) return aid;
+      }
+      return null;
+    })();
+    const isMine2 = (appState.managedLocations||[]).includes(loc);
+    const disabledAttr = otherOwner ? 'disabled title="' + (getLang()==='en' ? `Owned by Admin ${otherOwner}` : `管理员${otherOwner}已认领`) + '"' : '';
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);font-size:14px;">
-      <span>${loc}</span>
-      <button class="btn btn-danger btn-sm" style="font-size:11px;" onclick="deleteLocation('${safeLoc}')">${getLang()==='en' ? 'Delete' : '删除'}</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span>${loc}</span>
+        ${locOwnerTags}
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-muted);cursor:pointer;">
+          <input type="checkbox" ${isMine2?'checked':''} ${disabledAttr} onchange="toggleManagedLocation('${safeLoc}',this.checked)" style="width:15px;height:15px;accent-color:#1c4f80;"> ${getLang()==='en'?'Mine':'我管理'}
+        </label>
+        <button class="btn btn-danger btn-sm" style="font-size:11px;" onclick="deleteLocation('${safeLoc}')">${getLang()==='en' ? 'Delete' : '删除'}</button>
+      </div>
     </div>`;
   }).join('');
+}
+
+function toggleManagedLocation(loc, checked) {
+  if (!appState.managedLocations) appState.managedLocations = [];
+  const adminId = appState.currentAdminId || '1';
+  // Check if another admin already owns it
+  for (const [aid, p] of Object.entries(appState.allPartitions)) {
+    if (aid !== adminId && (p.managedLocations||[]).includes(loc)) {
+      alert(getLang()==='en' ? `Location "${loc}" is already managed by Admin ${aid}.` : `地点"${loc}"已被管理员${aid}认领。`);
+      renderLocMgmt();
+      return;
+    }
+  }
+  if (checked) {
+    if (!appState.managedLocations.includes(loc)) appState.managedLocations.push(loc);
+  } else {
+    appState.managedLocations = appState.managedLocations.filter(l => l !== loc);
+  }
+  persistData();
+  refreshLocationUI(); // also updates sched-location dropdown
+  renderLocMgmt();
 }
 
 function addLocation() {
@@ -1695,13 +1871,13 @@ function deleteLocation(loc) {
   const locs = getLocations();
   if (!locs.includes(loc)) return;
   // 检查是否有员工在此地点
-  const hasAssigned = Object.values(appState.locationMap).some(arr => arr.includes(loc));
+  const hasAssigned = Object.values(appState.locationMap).some(locObj => locObj && locObj[loc] !== undefined);
   const hasSchedule = Object.values(scheduleCache).some(d => d.loc === loc && Object.values(d.days).some(arr => arr.length > 0));
   if (hasAssigned || hasSchedule) {
     if (!confirm(getLang()==='en' ? `Location "${loc}" still has staff assignments or schedule data. All related data will be removed. Continue?` : `地点"${loc}"仍有员工标记或排班数据，删除后相关数据也会清除，确定继续吗？`)) return;
     // 清除员工地点标记
     for (const name of Object.keys(appState.locationMap)) {
-      appState.locationMap[name] = (appState.locationMap[name] || []).filter(l => l !== loc);
+      if (appState.locationMap[name]) delete appState.locationMap[name][loc];
     }
     // 清除该地点的排班数据
     for (const key of Object.keys(scheduleCache)) {
@@ -1737,11 +1913,14 @@ function renderEmpMgmt() {
     <thead><tr style="font-size:12px;color:var(--text-muted);border-bottom:2px solid var(--border);">
       <th style="text-align:left;padding:8px 12px;font-weight:600;">${t('emp_mgmt_col_name')}</th>
       <th style="text-align:left;padding:8px 12px;font-weight:600;">${t('emp_mgmt_col_location')}</th>
+      <th style="text-align:center;padding:8px 12px;font-weight:600;">${getLang()==='en'?'Admin':'管理员'}</th>
+      <th style="text-align:center;padding:8px 12px;font-weight:600;">${getLang()==='en'?'Mine':'我管理'}</th>
       <th style="text-align:left;padding:8px 12px;font-weight:600;">${t('emp_mgmt_col_account')}</th>
       <th style="text-align:right;padding:8px 12px;font-weight:600;">${t('emp_mgmt_col_action')}</th>
     </tr></thead>
     <tbody>${names.map(name => {
-      const locs = appState.locationMap[name] || [];
+      const locObj = appState.locationMap[name] || {};
+      const locs = Object.keys(locObj);
       const locStr = locs.length ? locs.join('、') : `<span style="color:#aaa;">${t('emp_mgmt_no_loc')}</span>`;
       const hasAccount = !!appState.employeeAccounts[name];
       const accountBadge = hasAccount
@@ -1751,9 +1930,27 @@ function renderEmpMgmt() {
       const resetBtn = hasAccount
         ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="resetEmpPassword('${safeName}')">${t('emp_mgmt_reset_pw')}</button> `
         : `<button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="createAccountForEmp('${safeName}')">${t('emp_mgmt_create_account')}</button> `;
+      // Build admin ownership tags
+      const ownerTags = (() => {
+        const tags = [];
+        const seen = new Set();
+        // Check current admin first
+        const adminId = appState.currentAdminId || '1';
+        if ((appState.managedEmployees||[]).includes(name)) { tags.push(adminId); seen.add(adminId); }
+        // Check other admins from allPartitions
+        for (const [aid, p] of Object.entries(appState.allPartitions)) {
+          if (!seen.has(aid) && (p.managedEmployees||[]).includes(name)) { tags.push(aid); seen.add(aid); }
+        }
+        return tags.length
+          ? tags.map(aid => `<span class="loc-owner-${aid}" style="display:inline-block;border-radius:10px;padding:1px 8px;font-size:11px;margin-right:3px;">${getLang()==='en'?'Admin':'管'} ${aid}</span>`).join('')
+          : `<span style="color:#aaa;font-size:11px;">${getLang()==='en'?'Unclaimed':'未认领'}</span>`;
+      })();
+      const isMine = (appState.managedEmployees||[]).includes(name);
       return `<tr style="border-bottom:1px solid #eef0f4;">
         <td style="padding:12px 12px;font-size:14px;font-weight:600;">${name}</td>
         <td style="padding:12px 12px;font-size:12px;color:var(--text-muted);">${locStr}</td>
+        <td style="padding:12px 12px;text-align:center;">${ownerTags}</td>
+        <td style="padding:12px 12px;text-align:center;"><input type="checkbox" ${isMine?'checked':''} onchange="toggleManagedEmployee('${safeName}',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#1c4f80;"></td>
         <td style="padding:12px 12px;">${accountBadge}</td>
         <td style="padding:12px 12px;text-align:right;white-space:nowrap;">
           ${resetBtn}<button class="btn btn-danger btn-sm" onclick="confirmDeleteEmployee('${safeName}')">${t('emp_mgmt_delete')}</button>
@@ -1792,6 +1989,18 @@ function renderEmpMgmt() {
         </table>
       </div>`;
   }
+}
+
+function toggleManagedEmployee(name, checked) {
+  if (!appState.managedEmployees) appState.managedEmployees = [];
+  if (checked) {
+    if (!appState.managedEmployees.includes(name)) appState.managedEmployees.push(name);
+  } else {
+    appState.managedEmployees = appState.managedEmployees.filter(n => n !== name);
+  }
+  persistData();
+  // Refresh visible tabs
+  renderEmpMgmt();
 }
 
 // 默认密码 hash（123456）
@@ -2787,7 +2996,7 @@ function getEligibleEmployees(loc, year, month) {
   const ov = appState.empOverrides[overKey] || { added:[], removed:[] };
   // base list from locationMap（标记了该地点的员工），包括所有被标记的员工（含未提交班表的）
   let base = Object.entries(appState.locationMap)
-    .filter(([n,locs]) => locs.includes(loc))
+    .filter(([n, locObj]) => locObj && locObj[loc] !== undefined)
     .map(([n]) => n);
   // 补充：把该月已有排班记录的人也加进来（即使员工已被删除或本月未提交，历史/确认班次仍需显示）
   const schedData = getSchedData(loc, year, month);
@@ -2879,7 +3088,7 @@ function renderScheduleGrid() {
 
   const noticeEl = document.getElementById('sched-notice');
   // 判断该地点是否从未有人被标记（与月份无关）
-  const anyMarkedToLoc = Object.values(appState.locationMap).some(locs => locs.includes(loc));
+  const anyMarkedToLoc = Object.values(appState.locationMap).some(locObj => locObj && locObj[loc] !== undefined);
   if (!anyMarkedToLoc) {
     noticeEl.style.display = 'block';
     noticeEl.textContent = `⚠️ ${t('sched_no_loc_notice', {loc})}`;
