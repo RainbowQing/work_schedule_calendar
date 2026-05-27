@@ -307,8 +307,10 @@ function doPost(e) {
         const mergedResigned = Object.assign({}, existing.resignedEmployees || {}, shared.resignedEmployees || {});
         // permanentlyDeleted：合并
         const mergedDeleted = Object.assign({}, existing.permanentlyDeleted || {}, shared.permanentlyDeleted || {});
-        // employeeAccounts：合并（incoming 优先，保留 existing 里 incoming 没有的）
-        const mergedEmpAccounts = Object.assign({}, existing.employeeAccounts || {}, shared.employeeAccounts || {});
+        // employeeAccounts：三方合并——EmpAccounts sheet（createEmpAccount 直接写）+ existing shared + incoming
+        // 顺序：sheet 最基础，existing 覆盖，incoming 优先（最新），确保两条写入路径都不丢
+        const sheetEmpAccounts = readEmpAccounts();
+        const mergedEmpAccounts = Object.assign({}, sheetEmpAccounts, existing.employeeAccounts || {}, shared.employeeAccounts || {});
         // locations：按管理员分区 merge
         // 保留 existing 里属于其他管理员的地点；当前管理员的地点以 incoming 为准（支持新增和删除）
         const existingLocs = existing.locations || [];
@@ -570,13 +572,17 @@ function doGet(e) {
 
   // ── 获取员工账号列表 ──
   if (action === 'getEmpAccounts') {
+    // 合并两套存储：shared.employeeAccounts（saveAdminState 写入）+ EmpAccounts sheet（createEmpAccount 直接写入）
+    // 以 sheet 数据为基础，shared 数据覆盖（shared 更新），保证两条写入路径的数据都不丢
     const shared = readSharedState();
-    if (shared.employeeAccounts && Object.keys(shared.employeeAccounts).length > 0) {
-      writeEmpAccounts(shared.employeeAccounts);
-      return jsonResponse({ success: true, accounts: shared.employeeAccounts });
+    const sheetAccounts = readEmpAccounts();
+    const mergedAccounts = Object.assign({}, sheetAccounts, shared.employeeAccounts || {});
+    if (Object.keys(mergedAccounts).length > 0) {
+      // 回写合并结果，保持两边同步
+      writeEmpAccounts(mergedAccounts);
+      return jsonResponse({ success: true, accounts: mergedAccounts });
     }
-    const accounts = readEmpAccounts();
-    return jsonResponse({ success: true, accounts });
+    return jsonResponse({ success: true, accounts: {} });
   }
 
   // ── 获取排班表（单个地点单月）──
