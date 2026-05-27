@@ -552,6 +552,21 @@ function doGet(e) {
     const adminId   = e.parameter.adminId;
     const shared    = readSharedState();
     const partition = adminId ? readPartitionState(adminId) : {};
+    // 把 EmpAccounts sheet 里有但 shared 里没有的员工补进来
+    // 原因：createEmpAccount 直接写 sheet，但 saveAdminState 可能还没来得及同步 shared
+    const sheetAccounts = readEmpAccounts();
+    let needWriteback = false;
+    if (!shared.employeeAccounts) { shared.employeeAccounts = {}; }
+    if (!shared.allEmployees) { shared.allEmployees = {}; }
+    for (const name of Object.keys(sheetAccounts)) {
+      if (!shared.employeeAccounts[name]) {
+        shared.employeeAccounts[name] = sheetAccounts[name];
+        shared.allEmployees[name] = true;
+        needWriteback = true;
+      }
+    }
+    // 如果有补充，回写 shared，确保下次一致
+    if (needWriteback) writeSharedState(shared);
     return jsonResponse({ success: true, shared, partition });
   }
 
