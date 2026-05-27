@@ -8,7 +8,7 @@
  * 使用步骤：
  * 1. 安装依赖：npm install
  * 2. 启动服务器：node server.js（或 npm start）
- * 3. 访问 http://localhost:3000/admin.html
+ * 3. 访问 http://localhost:8000/admin.html（端口在 config.js 的 LOCAL_PORT 配置）
  *
  * 数据存储在 ./data/schedule.db，包含以下表：
  *   submissions          员工班表提交（按姓名+年+月+version 唯一）
@@ -41,7 +41,16 @@ const crypto   = require('crypto');
 const Database = require('better-sqlite3');
 
 const app      = express();
-const PORT     = process.env.PORT || 3000;
+// 从 config.js 里提取 LOCAL_PORT，fallback 到环境变量或 8000
+function readPortFromConfig() {
+  try {
+    const cfg = fs.readFileSync(path.join(__dirname, 'config.js'), 'utf8');
+    const m = cfg.match(/const\s+LOCAL_PORT\s*=\s*(\d+)/);
+    if (m) return parseInt(m[1]);
+  } catch(e) {}
+  return 8000;
+}
+const PORT     = process.env.PORT || readPortFromConfig();
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_PATH  = path.join(DATA_DIR, 'schedule.db');
 
