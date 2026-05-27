@@ -3129,21 +3129,22 @@ async function refreshScheduleGrid() {
 }
 
 let _schedGridCtxKey = null;
-let _schedGridRendering = false;
+// 已触发过跨管理员预加载的 year||month 集合，避免重复触发
+const _crossAdminPrefetched = new Set();
 function renderScheduleGrid() {
   const loc = document.getElementById('sched-location').value;
   const year = parseInt(document.getElementById('sched-year').value);
   const month = parseInt(document.getElementById('sched-month').value);
-  // 预加载跨管理员冲突数据（异步，完成后若视图未变则重渲一次）
-  if (!_schedGridRendering) {
-    _schedGridRendering = true;
+  // 预加载跨管理员冲突数据：每个 year||month 只触发一次，完成后重渲一次
+  const ymKey = `${year}||${month}`;
+  if (!_crossAdminPrefetched.has(ymKey)) {
+    _crossAdminPrefetched.add(ymKey);
     _ensureCrossAdminCache(year, month).then(() => {
-      _schedGridRendering = false;
       const curLoc = document.getElementById('sched-location') && document.getElementById('sched-location').value;
       const curYear = parseInt(document.getElementById('sched-year') && document.getElementById('sched-year').value);
       const curMonth = parseInt(document.getElementById('sched-month') && document.getElementById('sched-month').value);
       if (curLoc === loc && curYear === year && curMonth === month) renderScheduleGrid();
-    }).catch(() => { _schedGridRendering = false; });
+    }).catch(() => { /* 静默失败，不影响正常渲染 */ });
   }
   updateMonthBadge(year, month);
   // 切换地点或月份时清空撤销栈
