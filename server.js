@@ -420,6 +420,7 @@ app.post('/api', (req, res) => {
       if (!adminId) return res.status(400).json({ success: false, error: 'Missing adminId' });
 
       const doSave = db.transaction(() => {
+        let mergedLocs = null; // 在 shared 块里赋值，partition 块里使用
         // ── shared 字段全量 merge：以 existing 为基础，incoming 只补充/更新 ──
         if (shared) {
           const existing = readSharedState();
@@ -427,8 +428,29 @@ app.post('/api', (req, res) => {
           const mergedResigned    = Object.assign({}, existing.resignedEmployees || {}, shared.resignedEmployees || {});
           const mergedDeleted     = Object.assign({}, existing.permanentlyDeleted || {}, shared.permanentlyDeleted || {});
           const mergedEmpAccounts = Object.assign({}, existing.employeeAccounts || {}, shared.employeeAccounts || {});
-          const mergedLocs        = [...new Set([...(existing.locations || []), ...(shared.locations || [])])];
-          const mergedConfirmed   = Object.assign({}, existing.confirmedWeeks || {}, shared.confirmedWeeks || {});
+          // locations：按管理员分区 merge
+          // 规则：保留 existing 里不属于当前管理员的地点；当前管理员的地点以 incoming 为准（支持新增和删除）
+          const myManagedLocs = new Set((partition && partition.managedLocations) || []);
+          // incoming.locations 里当前管理员新建的地点（不在 managedLocations 里但在 incoming 里）也要保留
+          const incomingLocsSet = new Set(shared.locations || []);
+          const existingLocs = existing.locations || [];
+          // 判断某地点是否属于当前管理员：在 incoming managedLocations 里，或在 incoming locations 但不在其他管理员的 managedLocations 里
+          const otherAdminLocs = new Set();
+          try {
+            const partRows = db.prepare("SELECT admin_id, state FROM admin_state_partition").all();
+            for (const pr of partRows) {
+              if (pr.admin_id === adminId) continue;
+              const ps = JSON.parse(pr.state || '{}');
+              (ps.managedLocations || []).forEach(l => otherAdminLocs.add(l));
+            }
+          } catch(e) {}
+          mergedLocs = [
+            // 保留 existing 里属于其他管理员的地点
+            ...existingLocs.filter(l => otherAdminLocs.has(l)),
+            // 加入 incoming 里的所有地点（当前管理员视角的完整列表，含新增，去掉的视为已删）
+            ...(shared.locations || []),
+          ].filter((l, i, arr) => arr.indexOf(l) === i); // 去重
+          // confirmedWeeks 已迁移到 partition，shared 里不再存储（兼容旧数据保留，但不主动写入）
           const mergedSlotLimits  = Object.assign({}, existing.slotLimits || {}, shared.slotLimits || {});
           const mergedLocSettings = Object.assign({}, existing.locSettings || {}, shared.locSettings || {});
           const mergedSubmissions = Object.assign({}, existing.submissions || {}, shared.submissions || {});
@@ -451,7 +473,6 @@ app.post('/api', (req, res) => {
             permanentlyDeleted: mergedDeleted,
             employeeAccounts:   mergedEmpAccounts,
             locations:          mergedLocs,
-            confirmedWeeks:     mergedConfirmed,
             slotLimits:         mergedSlotLimits,
             locSettings:        mergedLocSettings,
             submissions:        mergedSubmissions,
@@ -460,12 +481,28 @@ app.post('/api', (req, res) => {
           writeSharedState(mergedShared);
           saveEmpAccounts(mergedEmpAccounts);
         }
-        // 写该管理员的分区数据
+        // 写该管理员的分区数据（过滤掉已不在 locations 里的地点）
         if (partition) {
+          const validLocs = new Set(mergedLocs || []);
+          if (partition.managedLocations) {
+            partition.managedLocations = partition.managedLocations.filter(l => validLocs.has(l));
+          }
           writePartitionState(adminId, partition);
         }
       });
       doSave();
+      return res.json({ success: true });
+    } catch(err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  // 删除某地点的所有排班数据（删除地点时调用）
+  if (action === 'deleteLocationSchedules') {
+    try {
+      const { loc } = req.body;
+      if (!loc) return res.status(400).json({ success: false, error: 'Missing loc' });
+      db.prepare("DELETE FROM schedules WHERE loc = ?").run(loc);
       return res.json({ success: true });
     } catch(err) {
       return res.status(500).json({ success: false, error: err.message });
@@ -601,6 +638,28 @@ app.post('/api', (req, res) => {
       const { name } = req.body;
       db.prepare("INSERT OR REPLACE INTO emp_accounts(name, password_hash) VALUES(?, ?)").run(name, DEFAULT_PW_HASH);
       return res.json({ success: true });
+    } catch(err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  // ── 重置管理员密码（仅本地 localhost 可访问）──
+  if (action === 'resetAdminPassword') {
+    // 安全限制：只允许从本机发起
+    const clientIp = req.ip || req.connection.remoteAddress || '';
+    const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1';
+    if (!isLocal) return res.status(403).json({ success: false, error: 'Only accessible from localhost' });
+    try {
+      const { adminId, newPassword } = req.body;
+      if (!['1','2','3'].includes(String(adminId))) {
+        return res.json({ success: false, error: '无效的管理员ID（1/2/3）' });
+      }
+      if (!newPassword || newPassword.length < 6) {
+        return res.json({ success: false, error: '新密码至少6位' });
+      }
+      setAdminAccountHash(String(adminId), hashPassword(newPassword));
+      console.log(`[reset] 管理员 ${adminId} 密码已重置`);
+      return res.json({ success: true, message: `管理员 ${adminId} 密码已重置` });
     } catch(err) {
       return res.status(500).json({ success: false, error: err.message });
     }

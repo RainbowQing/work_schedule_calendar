@@ -297,6 +297,7 @@ function doPost(e) {
     if (action === 'saveAdminState') {
       const { adminId, shared, partition } = data;
       if (!adminId) return jsonResponse({ success: false, error: 'Missing adminId' });
+      let mergedLocs = null; // 在 shared 块里赋值，partition 块里使用
       if (shared) {
         const existing = readSharedState();
         // ── shared 字段全量 merge：以 existing 为基础，incoming 只补充/更新，不删除 ──
@@ -308,12 +309,22 @@ function doPost(e) {
         const mergedDeleted = Object.assign({}, existing.permanentlyDeleted || {}, shared.permanentlyDeleted || {});
         // employeeAccounts：合并（incoming 优先，保留 existing 里 incoming 没有的）
         const mergedEmpAccounts = Object.assign({}, existing.employeeAccounts || {}, shared.employeeAccounts || {});
-        // locations：取并集（保留所有地点）
+        // locations：按管理员分区 merge
+        // 保留 existing 里属于其他管理员的地点；当前管理员的地点以 incoming 为准（支持新增和删除）
         const existingLocs = existing.locations || [];
-        const incomingLocs = shared.locations || [];
-        const mergedLocs = [...new Set([...existingLocs, ...incomingLocs])];
-        // confirmedWeeks：合并
-        const mergedConfirmed = Object.assign({}, existing.confirmedWeeks || {}, shared.confirmedWeeks || {});
+        const otherAdminLocs = new Set();
+        try {
+          const allPartitions = readAllPartitions();
+          for (const [aid, pd] of Object.entries(allPartitions)) {
+            if (aid === adminId) continue;
+            (pd.managedLocations || []).forEach(l => otherAdminLocs.add(l));
+          }
+        } catch(e) {}
+        mergedLocs = [
+          ...existingLocs.filter(l => otherAdminLocs.has(l)),
+          ...(shared.locations || []),
+        ].filter((l, i, arr) => arr.indexOf(l) === i);
+        // confirmedWeeks 已迁移到 partition，shared 里不再存储（兼容旧数据保留，但不主动写入）
         // slotLimits：合并
         const mergedSlotLimits = Object.assign({}, existing.slotLimits || {}, shared.slotLimits || {});
         // locSettings：合并
@@ -339,7 +350,6 @@ function doPost(e) {
           permanentlyDeleted: mergedDeleted,
           employeeAccounts:   mergedEmpAccounts,
           locations:          mergedLocs,
-          confirmedWeeks:     mergedConfirmed,
           slotLimits:         mergedSlotLimits,
           locSettings:        mergedLocSettings,
           submissions:        mergedSubmissions,
@@ -349,7 +359,27 @@ function doPost(e) {
         writeEmpAccounts(mergedEmpAccounts);
       }
       if (partition) {
+        // 过滤掉已不在 locations 里的地点
+        const validLocs = new Set(mergedLocs || []);
+        if (partition.managedLocations) {
+          partition.managedLocations = partition.managedLocations.filter(l => validLocs.has(l));
+        }
         writePartitionState(adminId, partition);
+      }
+      return jsonResponse({ success: true });
+    }
+
+    // ── 删除某地点的所有排班数据（删除地点时调用）──
+    if (action === 'deleteLocationSchedules') {
+      const { loc } = data;
+      if (!loc) return jsonResponse({ success: false, error: 'Missing loc' });
+      const sheet = getOrCreateSheet(SHEET_SCHEDULES, ['Loc','Year','Month','UpdatedAt','ScheduleJSON']);
+      const rows = sheet.getDataRange().getValues();
+      // 从最后一行往前删，避免行号偏移
+      for (let i = rows.length - 1; i >= 1; i--) {
+        if (String(rows[i][0]) === String(loc)) {
+          sheet.deleteRow(i + 1);
+        }
       }
       return jsonResponse({ success: true });
     }
