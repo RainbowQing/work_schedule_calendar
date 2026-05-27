@@ -122,7 +122,9 @@ function migrateFromJSON() {
 
     // 迁移旧 admin_state 表 → admin_state_shared（共享数据）
     // 旧分区数据（empOrder/empOverrides/submissionSnapshots 等）迁移给管理员1
-    const oldState = db.prepare("SELECT state FROM admin_state WHERE id = 1").get();
+    // 全新安装时旧表不存在，跳过迁移
+    const oldTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='admin_state'").get();
+    const oldState = oldTableExists ? db.prepare("SELECT state FROM admin_state WHERE id = 1").get() : null;
     if (oldState) {
       try {
         const s = JSON.parse(oldState.state);
