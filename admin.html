@@ -1755,19 +1755,30 @@ function renderLocationTab() {
     const cells = locs.map((loc,i) => {
       const owner = locObj[loc];
       const isActive = owner !== undefined;
+      const iMyLoc = (appState.managedLocations || []).includes(loc);
       let colorClass = 'inactive';
       let cellStyle = '';
-      let onclickAttr = `onclick="toggleLocation('${name.replace(/'/g,"\\'")}','${loc}')"`;
-      let titleAttr = `title="${getLang()==='en'?'Click to mark':'点击标记'}"`;
+      let onclickAttr = '';
+      let titleAttr = '';
       if (isActive) {
         colorClass = `loc-owner-${owner}`;
         if (owner === adminId) {
-          titleAttr = `title="${getLang()==='en'?`Marked by you (Admin ${owner})`:`你（管理员${owner}）标记`}"`;
+          // 自己标记的、自己管理的地点 → 可取消
+          onclickAttr = `onclick="toggleLocation('${name.replace(/'/g,"\\'")}','${loc}')"`;
+          titleAttr = `title="${getLang()==='en'?`Marked by you (Admin ${owner}), click to remove`:`你（管理员${owner}）标记，点击取消`}"`;
         } else {
+          // 他人标记 → 只读展示
           cellStyle = ' style="cursor:not-allowed;opacity:0.6;"';
-          onclickAttr = '';
           titleAttr = `title="${getLang()==='en'?`Marked by Admin ${owner}`:`管理员${owner}标记`}"`;
         }
+      } else if (iMyLoc) {
+        // 未标记、但属于自己管理的地点 → 可标记
+        onclickAttr = `onclick="toggleLocation('${name.replace(/'/g,"\\'")}','${loc}')"`;
+        titleAttr = `title="${getLang()==='en'?'Click to mark':'点击标记'}"`;
+      } else {
+        // 未标记、且不是自己管理的地点 → 禁用
+        cellStyle = ' style="cursor:not-allowed;opacity:0.35;"';
+        titleAttr = `title="${getLang()==='en'?'Not your location':'非你管理的地点'}"`;
       }
       return `<td style="text-align:center;padding:8px;">
         <button class="loc-tag ${colorClass}"${cellStyle} ${onclickAttr} ${titleAttr}>${isActive?'✓':'+'}</button>
@@ -1781,6 +1792,14 @@ function renderLocationTab() {
 
 function toggleLocation(name, loc) {
   const adminId = appState.currentAdminId || '1';
+  // 只能操作自己 managedLocations 里的地点
+  if (!(appState.managedLocations || []).includes(loc)) {
+    const msg = document.getElementById('loc-save-msg');
+    msg.textContent = getLang() === 'en' ? `⚠ You don't manage location "${loc}"` : `⚠ 你未管理地点「${loc}」，无法标记`;
+    clearTimeout(msg._t);
+    msg._t = setTimeout(() => { msg.textContent = ''; }, 2500);
+    return;
+  }
   if (!appState.locationMap[name]) appState.locationMap[name] = {};
   const currentOwner = appState.locationMap[name][loc];
   // 不能操作别人标记的地点
