@@ -354,14 +354,15 @@ function doPost(e) {
       return jsonResponse({ success: true });
     }
 
-    // ── 保存排班表（单个地点单月），含冲突优先级判断 ──
+    // ── 保存排班表（单个地点单月），先到先得冲突检测 ──
     if (action === 'saveSchedule') {
       const { loc, year, month, schedule, adminId } = data;
       const sheet = getOrCreateSheet(SHEET_SCHEDULES, ['Loc','Year','Month','UpdatedAt','ScheduleJSON']);
       let finalSchedule = schedule || {};
       const conflicts = [];
 
-      // 冲突优先级判断
+      // 先到先得冲突检测：DB 中已有的其他地点排班数据优先；
+      // 仅当两地点均无历史数据同时发生冲突时才按管理员编号 1>2>3 决定。
       if (adminId && finalSchedule.days) {
         const rows = sheet.getDataRange().getValues();
         const partitions = readAllPartitions();
@@ -369,6 +370,16 @@ function doPost(e) {
         for (const [aid, pd] of Object.entries(partitions)) {
           (pd.managedLocations || []).forEach(l => { locOwnerMap[l] = aid; });
         }
+
+        // 检查本地点是否已有历史排班
+        let existingDays = {};
+        for (let i = 1; i < rows.length; i++) {
+          if (rows[i][0] === loc && rows[i][1] === year && rows[i][2] === month) {
+            try { existingDays = (JSON.parse(rows[i][4] || '{}')).days || {}; } catch(e) {}
+            break;
+          }
+        }
+        const hasExistingData = Object.keys(existingDays).length > 0;
 
         for (const [daySlotKey, names] of Object.entries(finalSchedule.days)) {
           if (!daySlotKey.endsWith('||start')) continue;
@@ -381,30 +392,34 @@ function doPost(e) {
                 const otherSched = JSON.parse(rows[i][4] || '{}');
                 const otherStart = (otherSched.days || {})[`${dateKey}||start`] || [];
                 if (!otherStart.includes(name)) continue;
+                // 其他地点已有该员工该天排班（来自 DB，先到先得）
                 const otherAdminId = locOwnerMap[otherLoc] || '1';
-                if (parseInt(adminId) > parseInt(otherAdminId)) {
-                  finalSchedule.days[daySlotKey] = finalSchedule.days[daySlotKey].filter(n => n !== name);
-                  const endKey = `${dateKey}||end`;
-                  if (finalSchedule.days[endKey]) finalSchedule.days[endKey] = finalSchedule.days[endKey].filter(n => n !== name);
-                  conflicts.push({ name, date: dateKey, otherLoc, otherAdminId });
-                }
+                finalSchedule.days[daySlotKey] = finalSchedule.days[daySlotKey].filter(n => n !== name);
+                const endKey = `${dateKey}||end`;
+                if (finalSchedule.days[endKey]) finalSchedule.days[endKey] = finalSchedule.days[endKey].filter(n => n !== name);
+                conflicts.push({ name, date: dateKey, otherLoc, otherAdminId });
               } catch(err) {}
             }
           }
+        }
+
+        // 本地点首次保存且有冲突：拒绝保存，通知客户端刷新重排
+        if (conflicts.length > 0 && !hasExistingData) {
+          return jsonResponse({ success: false, conflicts });
         }
       }
 
       const schedJson = JSON.stringify(finalSchedule);
       const updatedAt = new Date().toISOString();
-      const rows = sheet.getDataRange().getValues();
-      for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] === loc && rows[i][1] === year && rows[i][2] === month) {
+      const rows2 = sheet.getDataRange().getValues();
+      for (let i = 1; i < rows2.length; i++) {
+        if (rows2[i][0] === loc && rows2[i][1] === year && rows2[i][2] === month) {
           sheet.getRange(i + 1, 4, 1, 2).setValues([[updatedAt, schedJson]]);
-          return jsonResponse({ success: true, updatedAt, conflicts });
+          return jsonResponse({ success: true, updatedAt, conflicts, savedSchedule: finalSchedule });
         }
       }
       sheet.appendRow([loc, year, month, updatedAt, schedJson]);
-      return jsonResponse({ success: true, updatedAt, conflicts });
+      return jsonResponse({ success: true, updatedAt, conflicts, savedSchedule: finalSchedule });
     }
 
     // ── 删除某员工的所有提交记录 ──

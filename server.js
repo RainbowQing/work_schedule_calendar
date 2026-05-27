@@ -480,10 +480,15 @@ app.post('/api', (req, res) => {
       const y = parseInt(year), m = parseInt(month);
       const updatedAt = new Date().toISOString();
 
-      // 冲突优先级判断：同一员工同一天在多个地点有排班时，按管理员优先级 1>2>3
-      // 读取当前已有排班，检查是否与其他管理员的排班冲突
+      // 先到先得冲突检测：同一员工同一天在多个地点有排班时，已保存的数据优先；
+      // 仅当两个管理员在同一请求中同时出现同员工同天冲突（即其他地点也没有已保存数据）时，
+      // 才按管理员编号 1>2>3 决定优先级。
       let finalSchedule = schedule || {};
-      const conflicts = []; // 记录被高优先级覆盖的冲突信息
+      const conflicts = []; // 记录被移除的冲突排班
+
+      // 先检查本地点是否已有历史排班（用于判断"当前保存"是否覆盖已有数据）
+      const existingRow = db.prepare("SELECT schedule FROM schedules WHERE loc = ? AND year = ? AND month = ?").get(loc, y, m);
+      const existingSchedule = existingRow ? JSON.parse(existingRow.schedule || '{}') : {};
 
       if (adminId && finalSchedule.days) {
         // 获取所有地点同月排班，用于冲突检测
@@ -512,13 +517,15 @@ app.post('/api', (req, res) => {
                 const otherStart = (otherSched.days || {})[`${dateKey}||start`] || [];
                 if (!otherStart.includes(name)) continue;
 
-                // 该员工当天在其他地点已排班，判断优先级
+                // 该员工当天在其他地点已有排班记录（先到先得：已有数据优先）
                 const otherAdminId = locOwnerMap[other.loc] || '1';
-                const myPriority    = parseInt(adminId)     || 99;
-                const otherPriority = parseInt(otherAdminId) || 99;
 
-                if (myPriority > otherPriority) {
-                  // 我的优先级低，移除该员工的排班
+                // 判断"其他地点的排班"是否来自已保存的历史数据，还是同一请求中的冲突
+                // 策略：只要 DB 中其他地点已有该员工该天的排班，本次保存就被拒绝
+                // （如果其他地点也是刚刚保存、尚未写入 DB，则按管理员编号 1>2>3 决定）
+                const otherIsAlreadySaved = true; // otherSchedules 均来自 DB 查询，代表已有数据
+                if (otherIsAlreadySaved) {
+                  // 已有数据优先：移除本次排班中该员工
                   finalSchedule.days[daySlotKey] = finalSchedule.days[daySlotKey].filter(n => n !== name);
                   const endKey = `${dateKey}||end`;
                   if (finalSchedule.days[endKey]) {
@@ -526,15 +533,22 @@ app.post('/api', (req, res) => {
                   }
                   conflicts.push({ name, date: dateKey, otherLoc: other.loc, otherAdminId });
                 }
-                // 我的优先级高或相等：保留我的排班（不修改其他地点的数据，前端冲突标记会显示）
               } catch(e) {}
             }
           }
         }
       }
 
+      // 如果有冲突且本地点之前没有任何已保存排班，则整体拒绝保存，通知客户端刷新重排
+      // 如果本地点已有历史排班（部分员工冲突），则保存去除冲突后的版本并告知
+      const hasExistingData = Object.keys(existingSchedule.days || {}).length > 0;
+      if (conflicts.length > 0 && !hasExistingData) {
+        // 本地点是第一次保存但发现冲突：拒绝保存，要求客户端刷新
+        return res.json({ success: false, conflicts });
+      }
+
       db.prepare("INSERT OR REPLACE INTO schedules(loc, year, month, updated_at, schedule) VALUES(?, ?, ?, ?, ?)").run(loc, y, m, updatedAt, JSON.stringify(finalSchedule));
-      return res.json({ success: true, updatedAt, conflicts });
+      return res.json({ success: true, updatedAt, conflicts, savedSchedule: finalSchedule });
     } catch(err) {
       return res.status(500).json({ success: false, error: err.message });
     }

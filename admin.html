@@ -946,14 +946,31 @@ async function saveScheduleToServer(loc, year, month) {
   const cached = scheduleCache[key] || { days: {}, timeOverrides: {} };
   const schedule = { days: cached.days || {}, timeOverrides: cached.timeOverrides || {} };
   const result = await Backend.saveSchedule(loc, year, month, schedule, adminId);
-  if (!result || !result.success) throw new Error(result && result.error ? result.error : '保存失败');
+  if (!result || !result.success) {
+    // result.conflicts 表示"先到先得"冲突，服务器拒绝了保存
+    if (result && result.conflicts && result.conflicts.length > 0) {
+      const names = [...new Set(result.conflicts.map(c => c.name))];
+      const details = result.conflicts.map(c => `${c.name}（${c.date}）已由管理员${c.otherAdminId}排在${c.otherLoc}`).join('；');
+      showMsg(`⚠ 排班冲突：${details}，请刷新后重新安排`);
+      console.warn('排班冲突（先到先得，本次保存被拒绝）:', result.conflicts);
+      return result; // 不抛出，让调用方知道是冲突而非网络错误
+    }
+    throw new Error(result && result.error ? result.error : '保存失败，请检查网络连接');
+  }
   _takeScheduleSaveSnapshot(loc, year, month);
   _updateSaveIndicator();
-  // 如果 result.conflicts 不为空，显示冲突提示
+  // 如果 result.conflicts 不为空（有员工被移除出本次排班），更新本地缓存并提示
   if (result.conflicts && result.conflicts.length > 0) {
-    const msg = result.conflicts.map(c => `${c.name} ${c.date} 已被管理员${c.otherAdminId}排在${c.otherLoc}`).join('\n');
-    console.warn('排班冲突（低优先级被覆盖）:\n' + msg);
-    showMsg('⚠ 部分排班因优先级冲突未能保存，详见控制台');
+    // 服务器已将冲突员工从排班中移除，同步更新本地缓存
+    const serverSchedule = result.savedSchedule;
+    if (serverSchedule && serverSchedule.days) {
+      if (!scheduleCache[key]) scheduleCache[key] = { days: {}, timeOverrides: {} };
+      scheduleCache[key].days = serverSchedule.days;
+    }
+    const details = result.conflicts.map(c => `${c.name}（${c.date}）已由管理员${c.otherAdminId}排在${c.otherLoc}`).join('；');
+    showMsg(`⚠ 部分排班未保存：${details}`);
+    console.warn('排班冲突（员工已被移除）:', result.conflicts);
+    renderScheduleGrid();
   }
   return result;
 }
@@ -3195,6 +3212,12 @@ async function refreshScheduleGrid() {
     await fetchAndCacheSubs(year, month, true);
     await fetchAndCacheSchedule(loc, year, month, true);
     _prefetchAdjacentMonths(loc, year, month);
+    // 清除当前月份的跨管理员缓存，强制重新拉取其他管理员的排班数据
+    const ymKey = `${year}||${month}`;
+    _crossAdminPrefetched.delete(ymKey);
+    for (const k of Object.keys(_crossAdminCache)) {
+      if (k.includes(`||${year}||${month}`)) delete _crossAdminCache[k];
+    }
     renderScheduleGrid();
     renderEmpMgmt();
     renderLocationTab();
