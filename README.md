@@ -51,7 +51,7 @@
 
 ---
 
-### 方式一：GitHub Pages + Google Apps Script（推荐）
+### 方式一：GitHub Pages + Google Apps Script
 
 前端部署在 GitHub Pages，后端使用 Google Apps Script，数据存储在 Google Sheets。无需服务器，适合公开访问的生产环境。
 
