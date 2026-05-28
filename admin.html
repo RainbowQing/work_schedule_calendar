@@ -2343,8 +2343,9 @@ function closeDelEmpModal() {
 // 离职：保留有排班记录的月份数据，清理无排班记录的月份，并从显示列表中隐藏
 function deleteEmployeeResigned(name) {
   closeDelEmpModal();
+  // 离职：打 resignedEmployees 标记，保留 allEmployees（让后端 merge 知道此人存在但已离职）
+  // 注意：不能 delete allEmployees[name]，否则后端 merge 时 existing 里的记录会让此人复活
   appState.resignedEmployees[name] = true;
-  delete appState.allEmployees[name];
   delete appState.locationMap[name];
   delete appState.employeeAccounts[name];
   Backend.deleteEmpAccount(name).catch(e => console.warn('后端删除账号失败:', e));
@@ -2412,9 +2413,11 @@ async function _doDeleteEmployee(name, isPermanent) {
     appState.submissions[key] = appState.submissions[key].filter(s => s.name !== name);
   }
   delete appState.locationMap[name];
+  // 永久删除：用 permanentlyDeleted 标记覆盖后端 existing 数据，而不是直接 delete key。
+  // 如果直接 delete，后端 merge(existing, incoming) 时 existing 里的记录会让此人复活。
+  appState.permanentlyDeleted[name] = true;
   delete appState.allEmployees[name];
   delete appState.resignedEmployees[name];
-  delete appState.permanentlyDeleted[name];
   delete appState.employeeAccounts[name];
   // 清除该员工在所有月份的 empOverrides（added/removed 列表），防止幽灵行
   for (const key of Object.keys(appState.empOverrides)) {

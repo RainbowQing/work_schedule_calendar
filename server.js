@@ -438,7 +438,15 @@ app.post('/api', (req, res) => {
           const mergedAllEmp      = Object.assign({}, existing.allEmployees || {}, shared.allEmployees || {});
           const mergedResigned    = Object.assign({}, existing.resignedEmployees || {}, shared.resignedEmployees || {});
           const mergedDeleted     = Object.assign({}, existing.permanentlyDeleted || {}, shared.permanentlyDeleted || {});
+          // 永久删除的员工必须从 allEmployees/resignedEmployees/employeeAccounts 里清掉，
+          // 否则 existing 里的旧记录会通过 merge 让已删员工在下次 reload 时复活
+          for (const n of Object.keys(mergedDeleted)) {
+            delete mergedAllEmp[n];
+            delete mergedResigned[n];
+          }
           const mergedEmpAccounts = Object.assign({}, existing.employeeAccounts || {}, shared.employeeAccounts || {});
+          // 同样清掉 employeeAccounts 里永久删除的员工
+          for (const n of Object.keys(mergedDeleted)) { delete mergedEmpAccounts[n]; }
           // locations：按管理员分区 merge
           // 规则：保留 existing 里不属于当前管理员的地点；当前管理员的地点以 incoming 为准（支持新增和删除）
           const myManagedLocs = new Set((partition && partition.managedLocations) || []);

@@ -307,10 +307,18 @@ function doPost(e) {
         const mergedResigned = Object.assign({}, existing.resignedEmployees || {}, shared.resignedEmployees || {});
         // permanentlyDeleted：合并
         const mergedDeleted = Object.assign({}, existing.permanentlyDeleted || {}, shared.permanentlyDeleted || {});
+        // 永久删除的员工必须从 allEmployees/resignedEmployees 里清掉，
+        // 否则 existing 里的旧记录会通过 merge 让已删员工在 reload 时复活
+        for (const n of Object.keys(mergedDeleted)) {
+          delete mergedAllEmp[n];
+          delete mergedResigned[n];
+        }
         // employeeAccounts：三方合并——EmpAccounts sheet（createEmpAccount 直接写）+ existing shared + incoming
         // 顺序：sheet 最基础，existing 覆盖，incoming 优先（最新），确保两条写入路径都不丢
         const sheetEmpAccounts = readEmpAccounts();
         const mergedEmpAccounts = Object.assign({}, sheetEmpAccounts, existing.employeeAccounts || {}, shared.employeeAccounts || {});
+        // 同样清掉 employeeAccounts 里永久删除的员工
+        for (const n of Object.keys(mergedDeleted)) { delete mergedEmpAccounts[n]; }
         // locations：按管理员分区 merge
         // 保留 existing 里属于其他管理员的地点；当前管理员的地点以 incoming 为准（支持新增和删除）
         const existingLocs = existing.locations || [];

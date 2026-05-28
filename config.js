@@ -9,7 +9,7 @@
  */
 
 // 'gas' = Google Apps Script | 'local' = 本地 Node.js 服务器
-const BACKEND_MODE = 'gas';
+const BACKEND_MODE = 'local';
 
 // Google Apps Script Web App URL（BACKEND_MODE='gas' 时使用）
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyRsT5HNRkKQIF30iPai1Frth5r8-HJrku6HzXfAvfZAPQdwifqXoC82PMv2dwfwLkP/exec';
