@@ -805,6 +805,10 @@ const Backend = {
     if (BACKEND_MODE === 'local') return this._localPost({ action: 'deleteLocationSchedules', loc });
     return this._gasPost({ action: 'deleteLocationSchedules', loc });
   },
+  async deleteEmployeeSchedules(name) {
+    if (BACKEND_MODE === 'local') return this._localPost({ action: 'deleteEmployeeSchedules', name });
+    return this._gasPost({ action: 'deleteEmployeeSchedules', name });
+  },
 };
 
 // ── STATE ──
@@ -2402,10 +2406,12 @@ function getEmployeeScheduleSummary(name) {
 
 // 执行删除员工（已确认，含排班清除）——先删服务器数据，再清内存
 async function _doDeleteEmployee(name, isPermanent) {
-  // 1. 先删服务器上的提交记录和账号（await，确保删干净再继续）
+  // 1. 先删服务器上的提交记录、排班表记录和账号（await，确保删干净再继续）
   try { await Backend.deleteEmployeeSubmissions(name); } catch(e) {
     console.warn('后端提交记录删除失败:', e);
   }
+  // 从所有排班表里删掉该员工（清除 schedules 表中的排班数据）
+  Backend.deleteEmployeeSchedules(name).catch(e => console.warn('后端排班数据删除失败:', e));
   Backend.deleteEmpAccount(name).catch(e => console.warn('后端删除账号失败:', e));
 
   // 2. 清除内存中所有该员工的数据

@@ -394,6 +394,34 @@ function doPost(e) {
       return jsonResponse({ success: true });
     }
 
+    // 从所有排班表中删除某员工（永久删除员工时调用）
+    if (action === 'deleteEmployeeSchedules') {
+      const { name } = data;
+      if (!name) return jsonResponse({ success: false, error: 'Missing name' });
+      const sheet = getOrCreateSheet(SHEET_SCHEDULES, ['Loc','Year','Month','UpdatedAt','ScheduleJSON']);
+      const rows = sheet.getDataRange().getValues();
+      const updatedAt = new Date().toISOString();
+      for (let i = 1; i < rows.length; i++) {
+        try {
+          const sched = JSON.parse(rows[i][4] || '{}');
+          if (!sched.days) continue;
+          let changed = false;
+          for (const slotKey of Object.keys(sched.days)) {
+            const before = sched.days[slotKey];
+            if (Array.isArray(before) && before.includes(name)) {
+              sched.days[slotKey] = before.filter(n => n !== name);
+              changed = true;
+            }
+          }
+          if (changed) {
+            sheet.getRange(i + 1, 4).setValue(updatedAt);
+            sheet.getRange(i + 1, 5).setValue(JSON.stringify(sched));
+          }
+        } catch(e) {}
+      }
+      return jsonResponse({ success: true });
+    }
+
     // ── 保存排班表（单个地点单月），先到先得冲突检测 ──
     if (action === 'saveSchedule') {
       const { loc, year, month, schedule, adminId } = data;

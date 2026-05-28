@@ -528,6 +528,35 @@ app.post('/api', (req, res) => {
     }
   }
 
+  // 从所有排班表中删除某员工（永久删除员工时调用）
+  if (action === 'deleteEmployeeSchedules') {
+    try {
+      const { name } = req.body;
+      if (!name) return res.status(400).json({ success: false, error: 'Missing name' });
+      const rows = db.prepare("SELECT loc, year, month, schedule FROM schedules").all();
+      const updatedAt = new Date().toISOString();
+      for (const row of rows) {
+        const sched = JSON.parse(row.schedule || '{}');
+        if (!sched.days) continue;
+        let changed = false;
+        for (const slotKey of Object.keys(sched.days)) {
+          const before = sched.days[slotKey];
+          if (before.includes(name)) {
+            sched.days[slotKey] = before.filter(n => n !== name);
+            changed = true;
+          }
+        }
+        if (changed) {
+          db.prepare("UPDATE schedules SET schedule = ?, updated_at = ? WHERE loc = ? AND year = ? AND month = ?")
+            .run(JSON.stringify(sched), updatedAt, row.loc, row.year, row.month);
+        }
+      }
+      return res.json({ success: true });
+    } catch(err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
   // 保存排班表（单个地点单月），含排班冲突优先级判断
   if (action === 'saveSchedule') {
     try {
