@@ -1634,6 +1634,7 @@ async function loadSubmissions() {
     fetchAndCacheSubs(year, month, false),
   ]);
   renderSubmissionsTable();
+  renderEmpMgmt(); // 同步刷新员工管理界面，显示其他管理员的最新改动
 }
 
 function renderSubmissionsTable() {
