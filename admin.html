@@ -1628,7 +1628,11 @@ async function loadSubmissions() {
   const year = parseInt(document.getElementById('sub-year').value);
   const month = parseInt(document.getElementById('sub-month').value);
   updateMonthBadge(year, month);
-  await fetchAndCacheSubs(year, month, false);
+  // 同时拉取最新 adminState（员工管理数据）和提交数据，确保其他管理员的改动也能同步
+  await Promise.all([
+    loadPersistedData(),
+    fetchAndCacheSubs(year, month, false),
+  ]);
   renderSubmissionsTable();
 }
 
